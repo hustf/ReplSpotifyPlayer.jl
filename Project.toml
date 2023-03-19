@@ -1,0 +1,13 @@
+name = "ReplSpotifyPlayer"
+uuid = "306ff6e8-cf68-49cb-8c42-e7ffdeba4da8"
+authors = ["hustf <hustf@users.noreply.github.com> and contributors"]
+version = "0.0.1"
+
+[compat]
+julia = "1.8"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
