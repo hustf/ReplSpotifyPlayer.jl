@@ -1,4 +1,59 @@
-# This file copies some 'interface' functions from Spotify.jl/example/playlist_and_library_utilites.jl
+# This file wraps functions from Spotify.jl. Many are based on Spotify.jl/example/playlist_and_library_utilites.jl
+# Some of these wrappers translate into ReplSpotifyPlayer types and DataFrame.
+
+"""
+    playlist_owned_refs_get(;silent = true)
+    -> Vector{PlaylistRef}, prints to stdout
+
+Storing PlaylistRefs instead of SpPlaylistId enables us to
+identify when playlist contents have been updated. There's
+no need to refresh our local lists when snapshot_id is
+unchanged.
+
+This function is so quick that there's no need to store output
+for long (tracks are another matter, and have no snapshot_id).
+"""
+function playlist_owned_refs_get(;silent = true)
+    batchsize = 50
+    playlistrefs = Vector{PlaylistRef}()
+    for batchno = 0:200
+        json, waitsec = Spotify.Playlists.playlist_get_current_user(limit = batchsize, offset = batchno * batchsize)
+        isempty(json) && break
+        waitsec > 0 && throw("Too fast, whoa!")
+        l = length(json.items)
+        l == 0 && break
+        for item in json.items
+            if item.owner.display_name == get_user_name()
+                ! silent && println(stdout, item.name)
+                push!(playlistrefs, PlaylistRef(item))
+            else
+                ! silent && printstyled(stdout, "We're not monitoring playlist $(item.name), which is owned by $(item.owner.id)\n", color= :176)
+            end
+        end
+    end
+    playlistrefs
+end
+
+"""
+    playlist_owned_dataframe_get(; silent = true)
+
+# Example
+
+```
+julia> playlist_owned_dataframe_get()
+87×3 DataFrame
+ Row │ name          snapshot_id                        id
+     │ String        String                             SpPlayli…
+─────┼─────────────────────────────────────────────────────────────────────────
+   1 │ Santana       MTUsZjkxNTk5ZTNjZmU5NTAwNjVmZmMw…  3NlsEQpwa0EGKoWjI6lRGG
+   2 │ 123-124spm    MTQsYTRjZWY5NTMwZjQwOTM2NjYxOGFk…  5c0by8vfXvJ2MVTyExKBHA
+  ⋮  │      ⋮                        ⋮                            ⋮
+  87 │ Nero remix    MTIsZWY1NTIxMjlmYjRhYTU3NTIyOTcz…  6SsuaqQY0ibRJOpWVyshfb
+                                                                84 rows omitted
+```
+"""
+playlist_owned_dataframe_get(; silent = true) = DataFrame(playlist_owned_refs_get(;silent))
+
 
 """
     track_ids_and_names_in_playlist(playlist_id::SpPlaylistId)
@@ -62,4 +117,33 @@ function is_item_track_playable(it::JSON3.Object)
     isnothing(it.track.id) && return false
     haskey(it.track, :is_playable) && ! it.track.is_playable && return false
     true
+end
+
+
+wanted_feature_keys() = [:danceability, :key, :valence, :speechiness, :duration_ms, :instrumentalness, :liveness, :mode, :acousticness, :time_signature, :energy, :tempo, :loudness]
+wanted_feature_pair(p) = p[1] ∈ wanted_feature_keys()
+function get_audio_features_dic(trackid)
+    jsono, waitsec = tracks_get_audio_features(trackid)
+    if waitsec > 0
+        @info waitsec
+        sleep(waitsec)
+    end
+    filter(wanted_feature_pair, jsono)
+end
+function append_missing_audio_features!(tracks_data)
+    prna = propertynames(tracks_data)
+    notpresent = setdiff(wanted_feature_keys(), prna)
+    if ! isempty(notpresent)
+        v = Vector{Any}(fill(missing, nrow(tracks_data)))
+        nt = map(k-> k => copy(v), notpresent)
+        insertcols!(tracks_data, 3, nt...)
+    end
+end
+function insert_audio_feature_vals!(trackrefs_rw)
+    ! ismissing(trackrefs_rw[first(wanted_feature_keys())]) && return trackrefs_rw
+    fdic = get_audio_features_dic(trackrefs_rw[:trackid])
+    for (k,v) in fdic
+        trackrefs_rw[k] = v
+    end
+    trackrefs_rw
 end
