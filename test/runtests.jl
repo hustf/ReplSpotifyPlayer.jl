@@ -1,6 +1,6 @@
 using ReplSpotifyPlayer
 using Test
 
-@testset "ReplSpotifyPlayer.jl" begin
-    # Write your tests here.
+@testset "trackrefs_dataframe" begin
+    include("tracks_dataframe.jl")
 end
