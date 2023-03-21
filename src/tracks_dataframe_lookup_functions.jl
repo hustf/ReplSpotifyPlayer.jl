@@ -44,4 +44,3 @@ is_track_in_data(trackrefs_rw::DataFrameRow, t::SpTrackId) = ! isempty(trackrefs
 is_track_in_data(tracks_data::DataFrame, t::SpTrackId) = ! isempty(tracks_data) && t ∈ tracks_data.trackid
 is_track_in_data(track::TrackRef) = is_track_in_data(track.id)
 is_track_in_data(trackid) = is_track_in_data(TDF[], trackid)
-

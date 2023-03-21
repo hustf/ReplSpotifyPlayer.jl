@@ -88,7 +88,12 @@ end
 tryparse(T::Type{SpTrackId}, s::String) = T(s)
 
 function tryparse(T::Type{PlaylistRef}, s::String)
-     v = split(s[14:end-1], "\", ")
+    pref = "PlaylistRef"
+    pref1 =  string(@__MODULE__ ) * "." * pref
+    if ! (startswith(s,  pref1)  || startswith(s,  pref)) 
+        throw("tryparse: Expected prefix $pref, got input: $s")
+     end
+     v = split(s[findfirst('(', s) + 2 : end - 1], "\", ")
      name = v[1]
      snapshot_id = v[2][2:end]
      id = SpPlaylistId(v[3])

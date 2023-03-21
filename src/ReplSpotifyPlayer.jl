@@ -34,13 +34,7 @@ include("tracks_dataframe_functions.jl")
 include("tracks_dataframe_lookup_functions.jl")
 include("tracks_dataframe_io.jl")
 function __init__()
-    additional_scopes = ["playlist-read-collaborative", "playlist-read-collaborative", "user-read-private", 
-        "user-modify-playback-state", "user-read-playback-state", "playlist-modify-private", 
-        "playlist-read-private"]
-    if ! Spotify.credentials_contain_scope(additional_scopes)
-        apply_and_wait_for_implicit_grant(;scopes= unique(vcat(additional_scopes, Spotify.DEFAULT_IMPLICIT_GRANT)))
-    end
-    TDF[] = tracks_data_get(;silent = false) # TEMP DEBUG
+    TDF[] = tracks_data_get(;silent = false)
     save_tracks_data(TDF[])
 end
 end # module
