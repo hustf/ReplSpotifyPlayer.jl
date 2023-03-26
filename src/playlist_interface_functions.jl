@@ -1,6 +1,6 @@
 # This file wraps functions from Spotify.jl.
-# Used by tracks_dataframe_functions.jl, i.e. not user initiated but
-# used to build and maintain the local data.
+# Used by tracks_dataframe_functions.jl, and
+# 'is_track_in_playlist' by repl_player.jl.
 # Some of these wrappers translate into ReplSpotifyPlayer types and DataFrame.
 
 # Some are based on Spotify.jl/example/
@@ -92,28 +92,75 @@ end
 
 
 
-"playlist_details_string(context::JSON3.Object) -> String"
-function playlist_details_string(context::JSON3.Object; link_for_copy = true)
+"playlist_details_print(context::JSON3.Object) -> nothing"
+function playlist_details_print(ioc, context::JSON3.Object)
     if context.type !== "playlist"
-        s = "Context is not playlist."
+        print(ioc, "Context is not playlist.")
         if context.type == "collection"
-            s *= " It is library / liked songs."
+            print(ioc, " It is library / liked songs.")
         elseif context.type == "album"
-            s *= " It is album as shown in `"
-            s *=  text_colors[:green]
-            s *= "track \\ album \\ artist"
-            # This assumes we will print this string in the color of _repl_player/wrap_command. Consider rewriting colors.
-            s *= text_colors[:light_blue] * "`"
+            print(ioc, " It is album as shown in `")
+            printstyled(ioc, "track \\ album \\ artist", color = :green)
+            print(ioc, "`")
         else
-            s *= " It is $(context.type)"
-            @show context
+            print(ioc, " It is $(context.type)")
         end
-        return s
+        return
     end
     playlist_id = SpPlaylistId(context.uri)
-    playlist_details_string(playlist_id; link_for_copy)
+    playlist_details_print(ioc, playlist_id)
+    nothing
 end
 
+
+
+
+
+"delete_track_from_playlist_print(track_id, , item::JSON3.Object) -> Bool"
+function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON3.Object)
+    if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
+        print(ioc, "\n  ❌ Can't delete \"")
+        track_album_artists_print(ioc, item)
+        print(ioc, "\"\n  - Not in playlist ")
+        playlist_details_print(ioc, playlist_id)
+        println(ioc)
+        return false
+    end
+    playlist_details = Spotify.Playlists.playlist_get(playlist_id)[1]
+    if isempty(playlist_details)
+        print(ioc, "\n  ❌ Delete: Can't get playlist details from ")
+        playlist_details_print(ioc, playlist_id)
+        println(ioc)
+        return false
+    end
+    plo_id = playlist_details.owner.id
+    user_id = Spotify.get_user_name()
+    if plo_id !== String(user_id)
+        print(ioc, "\n  ❌ Can't delete \"")
+        playlist_details_print(ioc, playlist_id)
+        println(ioc, "\" \n  - The playlist is owned by $plo_id, not $user_id.")
+        return false
+    end
+    printstyled(ioc, "\n  ✓ Going to delete ... $(repr("text/plain", track_id)) from ", color=:yellow)
+    ioc = color_set(ioc, :yellow)
+    playlist_details_print(ioc, playlist_id)
+    printstyled(ioc, "\n", color = :yellow)
+    res = Spotify.Playlists.playlist_remove_playlist_item(playlist_id, [track_id])[1]
+    if isempty(res)
+        print(ioc, "\n  ❌  Could not delete \"")
+        track_album_artists_print(ioc, item)
+        print(ioc, "\"\n  from ")
+        playlist_details_print(ioc, playlist_id)
+        println(ioc, ". \n  This is due to technical reasons.")
+        return false
+    else
+        printstyled(ioc, "This deletion may take minutes to show everywhere. The playlist's snapshot ID against which you deleted the track:\n", color = :green)
+        sleep(1)
+        TDF[] = tracks_data_get(;silent = true)
+        println(ioc,  "  ", res.snapshot_id)
+        return true
+    end
+end
 
 """
     is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
@@ -121,7 +168,6 @@ end
     
 """
 function is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
-    # TODO: Move to local lookup file.
     fields = "items(track(name,id)), next"
     o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100);
     track_ids = o.items .|> i -> i.track.id |> SpTrackId
@@ -135,37 +181,6 @@ function is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
         t in track_ids && return true
     end
     false
-end
-
-
-"delete_track_from_own_playlist(track_id, playing_now_desc) -> String, prints to stdout"
-function delete_track_from_own_playlist(track_id, playlist_id, playing_now_desc)
-    # TODO: Update TDF[] afterwards. Consider checking snapshot version first...
-    playlist_description = "\"" * playlist_details_string(playlist_id) * " \""
-    if ! is_track_in_playlist(track_id, playlist_id)
-        printstyled(stdout, "\n  Can't delete \"" * playing_now_desc * "\"\n  - Not in playlist $(playlist_description)\n", color = :red)
-       return "❌"
-    end
-    playlist_details = Spotify.Playlists.playlist_get(playlist_id)[1]
-    if isempty(playlist_details)
-        printstyled(stdout, "\n  Delete: Can't get playlist details from $(playlist_description).\n", color = :red)
-        return "❌"
-    end
-    plo_id = playlist_details.owner.id
-    user_id = Spotify.get_user_name()
-    if plo_id !== String(user_id)
-        printstyled(stdout, "\n  Can't delete " * playing_now_desc * "\n  - The playlist $(playlist_description) is owned by $plo_id, not $user_id.\n", color = :red)
-        return "❌"
-    end
-    printstyled(stdout, "Going to delete ... $(repr("text/plain", track_id)) from $(playlist_description) \n", color = :yellow)
-    res = Spotify.Playlists.playlist_remove_playlist_item(playlist_id, [track_id])[1]
-    if isempty(res)
-        printstyled(stdout, "\n  Could not delete " * playing_now_desc * "\n  from $(playlist_description). \n  This is due to technical reasons.\n", color = :red)
-        return "❌"
-    else
-        printstyled("This deletion may take minutes to show everywhere. The playlist's snapshot ID against which you deleted the track:\n  $(res.snapshot_id)", color = :green)
-        return ""
-    end
 end
 
 ########################
@@ -187,6 +202,7 @@ for long (tracks are another matter, and have no snapshot_id).
 function playlist_owned_refs_get(;silent = true)
     batchsize = 50
     playlistrefs = Vector{PlaylistRef}()
+    user_id  = get_user_name()
     for batchno = 0:200
         json, waitsec = Spotify.Playlists.playlist_get_current_user(limit = batchsize, offset = batchno * batchsize)
         isempty(json) && break
@@ -194,14 +210,15 @@ function playlist_owned_refs_get(;silent = true)
         l = length(json.items)
         l == 0 && break
         for item in json.items
-            if item.owner.display_name == get_user_name()
-                ! silent && println(stdout, item.name)
+            if item.owner.display_name == user_id 
+                ! silent && print(stdout, item.name, "  ")
                 push!(playlistrefs, PlaylistRef(item))
             else
-                ! silent && printstyled(stdout, "We're not monitoring playlist $(item.name), which is owned by $(item.owner.id)\n", color= :176)
+                ! silent && printstyled(stdout, "We're not monitoring playlist \"$(item.name)\", which is owned by $(item.owner.id)\n", color= :176)
             end
         end
     end
+    ! silent && print(stdout, "\n")
     playlistrefs
 end
 
@@ -242,29 +259,27 @@ end
 
 
 
-"playlist_details_string(playlist_id::SpPlaylistId; link_for_copy = true) -> String"
-function playlist_details_string(playlist_id::SpPlaylistId; link_for_copy = true)
+"playlist_details_print(playlist_id::SpPlaylistId)"
+function playlist_details_print(ioc, playlist_id::SpPlaylistId)
     pld = Spotify.Playlists.playlist_get(playlist_id)[1]
     if isempty(pld)
-        return "Can't get playlist details."
+        println(ioc, "Can't get playlist details.")
     end
-    s  = String(pld.name)
+    print(ioc, pld.name)
     plo_id = pld.owner.id
-    user_id = Spotify.get_user_name()
+    user_id = get_user_name()
     if plo_id !== String(user_id)
-        s *= " (owned by $(plo_id))"
+        print(ioc, " (owned by $(plo_id))")
     end
     if pld.description != ""
-        s *= "  ($(pld.description))"
+        print(ioc, " -- ",  pld.description, " -- ")
     end
     if pld.public && plo_id == String(user_id)
-        s *= " (public, $(pld.total) followers)"
+        print(ioc, " (public, $(pld.total) followers)")
     end
-    if link_for_copy
-        s *= "  " 
-        iob = IOBuffer()
-        show(IOContext(iob, :color => true), "text/plain", playlist_id)
-        s *= String(take!(iob))
+    if get(ioc, :print_ids, false)
+        print(ioc, "  ")
+        show(ioc, MIME("text/plain"), playlist_id)
     end
-    s
+    nothing
 end

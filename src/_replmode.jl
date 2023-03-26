@@ -1,5 +1,3 @@
-# This is included as a part of 'mini_player.jl'
-#
 # We define a custom REPL-mode in order to avoid pressing Return
 # after every keypress. `read(stdin, 1)` just won't do.
 #
@@ -7,9 +5,79 @@
 # based off the shell prompt (shell mode would
 # be entered by pressing ; at the julia> prompt).
 #
-#
 # Method based on 
 # https://erik-engheim.medium.com/exploring-julia-repl-internals-6b19667a7a62
+
+# We're going to wrap mini mode commands in this.
+# Shortcuts are defined in keymap_dict, but
+# what it then does is specificed in `wrap_command`.
+
+function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
+    # This buffer contain other characters typed so far.
+    iobuffer = LineEdit.buffer(state)
+    # write character typed into line buffer
+    LineEdit.edit_insert(iobuffer, char)
+    # change color of recognized character.
+    printstyled(stdout, char, color = :green)
+    act_on_keystroke(char)
+end
+
+color_set(io, col::Union{Int64, Symbol}) = color_set(io, text_colors[col])
+function color_set(io, col::String)
+    print(io, col)
+    IOContext(io, :outercolor => col)
+end
+function color_reset(ioc::IO)
+    print(ioc, get(ioc, :outercolor, text_colors[:normal]))
+    nothing
+end
+
+function act_on_keystroke(char)
+    # Most calls from here on
+    # will print something. 
+    ioc = IOContext(color_set(stdout, :green), :print_ids => false)
+    c = char[1]
+    if c == 'b' || char == "\e[D"
+        player_skip_to_previous()
+        # If we call player_get_current_track() right
+        # after changing tracks, we might get the
+        # previous state.
+        # Ref. https://github.com/spotify/web-api/issues/821#issuecomment-381423071
+        sleep(1)
+    elseif c == 'f' || char == "\e[C"
+        player_skip_to_next()
+        # Ref. https://github.com/spotify/web-api/issues/821#issuecomment-381423071
+        sleep(1)
+    elseif c == 'p'
+        pause_unpause_print(ioc)
+    elseif c == 'l'
+        io = color_set(ioc, :light_blue)
+        print(io, "  ")
+        current_playlist_context_print(io)
+        color_reset(ioc)
+    elseif char == "\e[3~"  || char == "\e\b"
+        io = color_set(stdout, :red)
+        print(io, "  ")
+        delete_current_playing_from_owned_print(io)
+        color_reset(ioc)
+    elseif c == 'a'
+        io = color_set(ioc, 176)
+        println(io)
+        current_audio_features_print(ioc)
+        color_reset(ioc)
+    elseif '0' <= c <= '9'
+        print(ioc, " ")
+        seek_in_track_print(ioc, Meta.parse(string(c)))
+    end
+    # After the command, a line with the current state:
+    print(ioc, "  ")
+    current_playing_print(ioc)
+    color_set(ioc, :normal)
+    nothing
+end
+
+
+
 
 function print_menu()
     l = text_colors[:light_black]
@@ -25,16 +93,19 @@ function print_menu()
 end
 
 # How we will respond to pressing enter when in mini player mode
-function on_non_empty_enter(s)
+on_non_empty_enter(s) = print_menu_and_current_playing()
+
+function print_menu_and_current_playing()
     print_menu()
-    print(stdout, text_colors[:green])
-    println(stdout, "  " * current_playing_string())
-    print(stdout, text_colors[:normal])
+    ioc = color_set(stdout, :green)
+    print(ioc, "  ")
+    current_playing_print(ioc)
     nothing
 end
 
 # To enter this new repl mode 'minimode', user must be at start of line, just as with the other
 # interface modes.
+# Printed output is what you get when pressing 'enter' afterwards.
 function triggermini(state::LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     iobuffer = LineEdit.buffer(state)
     if position(iobuffer) == 0
@@ -43,10 +114,7 @@ function triggermini(state::LineEdit.MIState, repl::LineEditREPL, char::Abstract
                 # Type of LineEdit.PromptState
                 prompt_state = LineEdit.state(state, PLAYERprompt[])
                 prompt_state.input_buffer = copy(iobuffer)
-                println(stdout)
-                print_menu()
-                s = current_playing_string()
-                printstyled(stdout, "\n  " * s * '\n', color = :green)
+                print_menu_and_current_playing()
             end
         end
     else
@@ -104,48 +172,7 @@ function add_seventh_prompt_mode(repl::LineEditREPL)
 end
 
 
-# We're going to wrap mini mode commands in this.
-# That means a shortcut is defined in keymap_dict, but
-# what it does is specificed here.
-function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
-    # This buffer contain other characters typed so far.
-    iobuffer = LineEdit.buffer(state)
-    # write character typed into line buffer
-    LineEdit.edit_insert(iobuffer, char)
-    # change color of recognized character.
-    printstyled(stdout, char, color = :green)
-    c = char[1]
-    if c == 'b' || char == "\e[D"
-        player_skip_to_previous()
-        s = ""
-        # If we call player_get_current_track() right
-        # after changing tracks, we might get the
-        # previous state.
-        # Ref. https://github.com/spotify/web-api/issues/821#issuecomment-381423071
-        sleep(1)
-    elseif c == 'f' || char == "\e[C"
-        player_skip_to_next()
-        s = ""
-        # Ref. https://github.com/spotify/web-api/issues/821#issuecomment-381423071
-        sleep(1)
-    elseif c == 'p'
-        s = pause_unpause()
-    elseif c == 'l'
-        s = "  " * current_playlist_context_string() * "\n"
-    elseif char == "\e[3~"  || char == "\e\b"
-        # This call prints multi-line output
-        s = delete_current_playing_from_owned_context()
-    elseif c == 'a'
-        s = "\n" * current_audio_features() * "\n"
-    elseif '0' <= c <= '9'
-        s = " " * seek_in_track(Meta.parse(string(c))) * "\n"
-    end
-    if s !== ""
-        printstyled(stdout, s, color = :light_blue)
-    end
-    scur = "  " * current_playing_string() * "\n"
-    printstyled(stdout, scur, color = :green)
-end
+
 
 function define_single_keystrokes!(special_prompt)
     # Single keystroke commands. Sorry for any ugliness.

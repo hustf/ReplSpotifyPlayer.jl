@@ -66,7 +66,7 @@ tdfr = view(TDF[], 10, :)
 @test ! is_other_playlist_snapshot_in_data(tdfr, pl_ref_na)
 @test is_other_playlist_snapshot_in_data(tdfr, pl_ref_old)
 
-# Test writing and reading csv. Currently not OK after reading......
+# Test writing and reading csv.
 
 tdfc = DataFrame(trackid = [tr_na], playlistref = [pl_ref_na])
 @test tdfc.trackid[1] == tr_na
@@ -74,12 +74,7 @@ tdfc = DataFrame(trackid = [tr_na], playlistref = [pl_ref_na])
 
 pth = mktempdir()
 fpth = joinpath(pth, "dataframe_test.csv")
-ReplSpotifyPlayer.save_tracks_data(tdfc; fpth ) # todo function name change
+ReplSpotifyPlayer.save_tracks_data(tdfc; fpth )
 tdfl = ReplSpotifyPlayer.load_tracks_data(;fpth)
 @test tdfl.trackid[1] == tr_na
 @test tdfl.playlistref[1] == pl_ref_na
-
-# TODO: Depending on context, we do get things like
-#julia>     TDF[].playlistref[1869].name
-#"ayer.PlaylistRef(\"U2"
-# Modify parseing....

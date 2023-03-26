@@ -3,18 +3,17 @@
 # They do not fit neatly in player_interface_functions or playlist_interface_functions.
 # They are based on Spotify.jl/example/
 
-"track_album_artists_string(item::JSON3.Object; link_for_copy = true) -> String"
-function track_album_artists_string(item::JSON3.Object; link_for_copy = true)
-    a = item.album.name
+"track_album_artists_print(ioc, item::JSON3.Object)"
+function track_album_artists_print(ioc, item::JSON3.Object)
+    print(ioc, item.name, " \\ ", item.album.name)
     ars = item.artists
     vs = [ar.name for ar in ars]
-    link = ""
-    if link_for_copy
+    print(ioc, " \\ ", join(vs, " & "))
+    if get(ioc, :print_ids, false)
         track_id = SpTrackId(item.id)
-        link *= "  " 
-        iob = IOBuffer()
-        show(IOContext(iob, :color => true), "text/plain", track_id)
-        link *= String(take!(iob))
+        print(ioc, "  ")
+        show(ioc, MIME("text/plain"), track_id)
+        color_reset(ioc)
     end
-    item.name * " \\ " * a * " \\ " * join(vs, " & ") * link
+    nothing
 end

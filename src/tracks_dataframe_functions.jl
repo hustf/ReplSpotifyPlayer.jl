@@ -80,6 +80,7 @@ end
 - silent           Repl feedback
 """
 function tracks_data_append!(tracks_data, playlistrefs_df; silent = true)
+    ! silent && println("\nUpdating local data.. ")
     for x in eachrow(playlistrefs_df)
         pl_ref = PlaylistRef(x)
         if ! is_playlist_snapshot_in_data(tracks_data, pl_ref)
@@ -92,9 +93,8 @@ function tracks_data_append!(tracks_data, playlistrefs_df; silent = true)
             tracks_data_append!(tracks_data, pl_ref; silent)
             @assert !isempty(tracks_data)
         else
-            ! silent && println(stdout, pl_ref.name,  " - it is known...")
+            ! silent && printstyled(stdout, pl_ref.name * "  ",  color = :light_black)
         end
-        #x.name ==  "107-108spm" && break # TEMP DEBUG
     end
     tracks_data
 end
@@ -170,7 +170,6 @@ function tracks_data_append_audio_features!(tracks_data; silent = true)
     nr = nrow(tracks_data)
     for (i, trackrefs_rw) in enumerate(eachrow(tracks_data))
         insert_audio_feature_vals!(trackrefs_rw)
-        #trackrefs_rw[:trackname] ==  "Brian Song" && break # TEMP DEBUG
         if mod(i, 10) == 1
             ! silent && print(stdout, " Audio features  ", i, " / ", nr)
         end

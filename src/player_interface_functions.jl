@@ -3,15 +3,17 @@
 # They wrap hierarcical functionality in Spotify/player
 # They are based on Spotify.jl/example/
 """
-    get_player_state_print_feedback()
+    get_player_state(ioc)
     --> state object
 Note: state contains the current track,
 but it takes up to a second to update after changes.
+
+If the state isn't useable, prints feedback to stdout directly. 
 """
-function get_player_state_print_feedback()
+function get_player_state(ioc)
     st = player_get_state()[1]
     if isempty(st)
-        print(stdout, """Can't get Spotify state.
+        print(ioc, """Can't get Spotify state.
         - Is $(Spotify.get_user_name()) running Spotify on any device? 
         - Has $(Spotify.get_user_name()) started playing any track?
         """)
