@@ -11,9 +11,12 @@ julia> TDF[] = tracks_data_get(; silent = false)
 function tracks_data_get(;silent = true)
     tracks_data = load_tracks_data()
     playlistrefs_df = playlist_owned_dataframe_get(;silent)
-    tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df)
+    #tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistrefs_df)
     sort!(playlistrefs_df)
+    # This will append tracks, and also delete old versions.
     tracks_data_append!(tracks_data, playlistrefs_df; silent)
+    tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df; silent)
+
     tracks_data_append_audio_features!(tracks_data; silent)
     tracks_data
 end
@@ -24,11 +27,11 @@ end
 
 In-place outdated reference deletion. Reorders so as to place 'missings' in the last ref. columns.
 """
-function tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistref)
+function tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistref::PlaylistRef)
     id = playlistref.id
     snid = playlistref.snapshot_id
-    refdata = @view tracks_data[!, r"playlistref"]
-    for rn in 1:nrow(tracks_data)
+    refdata = tracks_data[!, r"playlistref"]
+    for rn in 1:nrow(refdata)
         for cn in 1:ncol(refdata)
             plc = refdata[rn, cn] # 'unpack'
             if ! ismissing(plc)
@@ -44,13 +47,20 @@ function tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistref)
         tracks_data[rn, :] = sort_columns_missing_last(tracks_data[rn, :])
     end
 end
+function tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistrefs_df::DataFrame)
+    for rn in 1:nrow(playlistrefs_df)
+        playlistref = PlaylistRef(playlistrefs_df[rn,:])
+        tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistref)
+    end
+end
 
 """
-    tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df)
+    tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df; silent = true)
 
 In-place unsubscribed reference deletion. Reorders so as to place 'missings' in the last ref. columns.
 """
-function tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df)
+function tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df::DataFrame; silent = true)
+    ! silent && println(stdout, "\nLooking for outdated playlist references.")
     ids = playlistrefs_df.id
     refdata = tracks_data[!, r"playlistref"]
     for rn in 1:nrow(refdata)
@@ -59,6 +69,7 @@ function tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df
             if ! ismissing(plc)
                 @assert plc isa PlaylistRef
                 if plc.id ∉ ids
+                    ! silent && print(stdout, "Remove ref. to \"", plc.name, "\"    ")
                     refdata[rn, cn] = missing
                 end
             end
@@ -66,6 +77,7 @@ function tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df
         # In-place value sort - all cols are of same type.
         tracks_data[rn, :] = sort_columns_missing_last(tracks_data[rn, :])
     end
+    ! silent && println(stdout)
 end
 
 
@@ -80,19 +92,20 @@ end
 - silent           Repl feedback
 """
 function tracks_data_append!(tracks_data, playlistrefs_df; silent = true)
-    ! silent && println("\nUpdating local data.. ")
+    ! silent && println(stdout, "\nUpdating local tracks from playlists ")
     for x in eachrow(playlistrefs_df)
         pl_ref = PlaylistRef(x)
+        if is_other_playlist_snapshot_in_data(tracks_data, pl_ref)
+            ! silent && printstyled(stdout, x.name * " - deleting old local version.   ", color = :light_red)
+            tracks_data_delete_other_playlist_snapshots!(tracks_data, pl_ref)
+        end
         if ! is_playlist_snapshot_in_data(tracks_data, pl_ref)
-            if is_other_playlist_snapshot_in_data(tracks_data, pl_ref)
-                tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistrefs_df)
-                ! silent && println(stdout, x.name, " - replacing old version in tracks table.")
-            else
-                ! silent && println(stdout, x.name, " - adding first version to tracks table.")
-            end
+            # Add latest version
+            ! silent && print(stdout, x.name, "    ")
             tracks_data_append!(tracks_data, pl_ref; silent)
             @assert !isempty(tracks_data)
         else
+            # Already up to date
             ! silent && printstyled(stdout, pl_ref.name * "  ",  color = :light_black)
         end
     end
@@ -155,6 +168,8 @@ function tracks_data_append!(tracks_data::DataFrame, pl_ref::PlaylistRef, track_
                     select!(tracks_data, 1:colprev)
                     @assert ncol(tracks_data) == colprev
                 else
+                    # TODO Check probable bug when updating a playlist to a new version.
+                    @show id name pl_ref rkeep (colprev + 1)
                     ! silent && println(stdout, "    -*Track ", name, " also appears in playlist ", pl_ref.name)
                 end
             end
@@ -168,13 +183,18 @@ end
 function tracks_data_append_audio_features!(tracks_data; silent = true)
     append_missing_audio_features!(tracks_data)
     nr = nrow(tracks_data)
+    ! silent && println(stdout, "\nAdding missing audio features in ", nr, " tracks. Progress:")
     for (i, trackrefs_rw) in enumerate(eachrow(tracks_data))
         insert_audio_feature_vals!(trackrefs_rw)
         if mod(i, 10) == 1
-            ! silent && print(stdout, " Audio features  ", i, " / ", nr)
+            if ! silent
+                REPL.Terminals.clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
+                print(stdout, "   ", round(i / nr; digits = 2))
+                sleep(0.01)
+            end
         end
     end
-    ! silent && print(stdout, "\n")
+    ! silent && println(stdout)
     tracks_data
 end
 

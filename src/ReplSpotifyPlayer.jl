@@ -1,9 +1,20 @@
 module ReplSpotifyPlayer
 # We'd like to
-#Lookup trackid -> playlist_ids
-#Lookup features -> track_ids
-#Lookup artists -> track_ids, playlist_ids
-#update data when snapshot number for a playlist changes.
+# Lookup trackid -> playlist_ids
+# Lookup features -> track_ids
+# Lookup artists -> track_ids, playlist_ids
+# update data when snapshot number for a playlist changes.
+
+# TODO: 1) Add menu option to show / unshow links 
+# Examine if this is the same track id, then make sure 'liked' and 'playlists' show up correctly no matter where it is played from
+#=
+   Big Hoops (Bigger The Better) \ The Spirit Indestructible \ Nelly Furtado
+l  Context is not playlist. It is library / liked songs.
+       Library
+  Big Hoops (Bigger The Better) \ The Spirit Indestructible \ Nelly Furtado
+l  89-90spm
+  Big Hoops (Bigger The Better) \ The Spirit Indestructible \ Nelly Furtado
+=#
 using REPL
 using REPL.LineEdit 
 using REPL: LineEditREPL
@@ -42,7 +53,7 @@ include("utilties_interface_functions.jl")
 include("tracks_dataframe_functions.jl")
 include("tracks_dataframe_lookup_functions.jl")
 include("tracks_dataframe_io.jl")
-include("_replmode.jl")
+include("replmode.jl")
 include("repl_player.jl")
 
 function __init__()

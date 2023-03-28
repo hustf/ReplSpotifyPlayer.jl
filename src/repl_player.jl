@@ -15,9 +15,8 @@ function current_playing_print(ioc)
     println(ioc)
     true
 end
-
 """
-    current_playlist_context_print() -> Bool
+    current_playlist_context_print(ioc) -> Bool
 
 Please wait 1 second after changes for correct info.
 """
@@ -25,13 +24,13 @@ function current_playlist_context_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     if isnothing(st.context)
-        ioc = color_set(ioc, :red)
-        print(ioc, "No current context")
+        io = color_set(ioc, :red)
+        print(io, "No current context")
+        color_reset(ioc)
         return true
     end
     playlist_details_print(ioc, st.context)
     # Also check if we have played past the end of the playlist and continued into the 'recommendations'.
-
     track_id = SpTrackId(st.item.uri)
     if st.context.type == "collection"
         if ! is_track_in_library(track_id)
@@ -46,8 +45,18 @@ function current_playlist_context_print(ioc)
        end
     end
     println(ioc)
+    # Now also print where the track also appears.
+    io = color_set(ioc, :light_black)
+    track_also_in_playlists_print(ioc, track_id, st.context)
+    if st.context.type == "collection"
+        if is_track_in_library(track_id)
+            println(io, "       Library")
+        end
+    end
+    color_reset(ioc)
     true
 end
+
 
 """
     delete_current_playing_from_owned_print(ioc) -> Bool
@@ -62,7 +71,8 @@ function delete_current_playing_from_owned_print(ioc)
         return delete_track_from_library_print(ioc, track_id, st.item)
     elseif st.context.type !== "playlist"
         print(ioc, "\n  Can't delete \"")
-        println(ioc, track_album_artists_print(ioc, st.item), "\"\n")
+        track_album_artists_print(ioc, st.item)
+        println(ioc)
         println(ioc, "  - Not currently playing from a known playlist or user's library.\n")
         return false
     end

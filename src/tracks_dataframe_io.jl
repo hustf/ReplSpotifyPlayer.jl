@@ -8,7 +8,7 @@ function _loadtypes(i, name)
     if name == :trackid
         SpTrackId
     elseif startswith(string(name), "playlistref")
-        PlaylistRef
+        Union{PlaylistRef, Missing}
     else
         nothing
     end

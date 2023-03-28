@@ -58,8 +58,22 @@ is_track_in_data(trackid) = is_track_in_data(TDF[], trackid)
 function is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId)
     if isempty(TDF[])
         TDF[] = tracks_data_get(;silent = false)
+        save_tracks_data(TDF[])
     end
     tracks_data = TDF[]
     td = subset(tracks_data, :trackid => ByRow(x -> x == t))
     is_playlist_in_data(td, playlist_id)
+end
+
+
+"playlistrefs_containing_track(t::SpTrackId) -> Vector{PlaylistRef}"
+function playlistrefs_containing_track(t::SpTrackId)
+    if isempty(TDF[])
+        TDF[] = tracks_data_get(;silent = false)
+        save_tracks_data(TDF[])
+    end
+    tracks_data = TDF[]
+    td = subset(tracks_data, :trackid => ByRow(x -> x == t))
+    refdata = td[!, r"playlistref"]
+    dropmissing(stack(refdata, r"playlistref"))[!, 2]
 end

@@ -109,6 +109,9 @@ end
 function triggermini(state::LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     iobuffer = LineEdit.buffer(state)
     if position(iobuffer) == 0
+        if ! Spotify.credentials_still_valid()
+            apply_and_wait_for_implicit_grant(;scopes = Spotify.spotcred().ig_scopes)
+        end
         if Spotify.credentials_still_valid()
             LineEdit.transition(state, PLAYERprompt[]) do
                 # Type of LineEdit.PromptState

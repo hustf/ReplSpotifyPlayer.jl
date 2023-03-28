@@ -115,8 +115,7 @@ end
 
 
 
-
-"delete_track_from_playlist_print(track_id, , item::JSON3.Object) -> Bool"
+"delete_track_from_playlist_print(track_id, item::JSON3.Object) -> Bool"
 function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON3.Object)
     if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
         print(ioc, "\n  ❌ Can't delete \"")
@@ -144,7 +143,7 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
     printstyled(ioc, "\n  ✓ Going to delete ... $(repr("text/plain", track_id)) from ", color=:yellow)
     ioc = color_set(ioc, :yellow)
     playlist_details_print(ioc, playlist_id)
-    printstyled(ioc, "\n", color = :yellow)
+    println(ioc)
     res = Spotify.Playlists.playlist_remove_playlist_item(playlist_id, [track_id])[1]
     if isempty(res)
         print(ioc, "\n  ❌  Could not delete \"")
@@ -157,6 +156,7 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
         printstyled(ioc, "This deletion may take minutes to show everywhere. The playlist's snapshot ID against which you deleted the track:\n", color = :green)
         sleep(1)
         TDF[] = tracks_data_get(;silent = true)
+        save_tracks_data(TDF[])
         println(ioc,  "  ", res.snapshot_id)
         return true
     end
@@ -209,16 +209,17 @@ function playlist_owned_refs_get(;silent = true)
         waitsec > 0 && throw("Too fast, whoa!")
         l = length(json.items)
         l == 0 && break
+        ! silent && batchno == 0 && println(stdout, "Retrieving playlists currently subscribed to:")
         for item in json.items
             if item.owner.display_name == user_id 
-                ! silent && print(stdout, item.name, "  ")
+                ! silent && print(stdout, item.name, "    ")
                 push!(playlistrefs, PlaylistRef(item))
             else
-                ! silent && printstyled(stdout, "We're not monitoring playlist \"$(item.name)\", which is owned by $(item.owner.id)\n", color= :176)
+                ! silent && printstyled(stdout, "(not monitoring \"$(item.name)\", which is owned by $(item.owner.id))    ", color= :light_black)
             end
         end
     end
-    ! silent && print(stdout, "\n")
+    ! silent && println(stdout)
     playlistrefs
 end
 
