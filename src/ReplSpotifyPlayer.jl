@@ -3,28 +3,19 @@ module ReplSpotifyPlayer
 # Lookup trackid -> playlist_ids
 # Lookup features -> track_ids
 # Lookup artists -> track_ids, playlist_ids
-# update data when snapshot number for a playlist changes.
+# Statistics for a playlist in terms of audio features and genres
 
-# TODO: 1) Add menu option to show / unshow links 
-# Examine if this is the same track id, then make sure 'liked' and 'playlists' show up correctly no matter where it is played from
-#=
-   Big Hoops (Bigger The Better) \ The Spirit Indestructible \ Nelly Furtado
-l  Context is not playlist. It is library / liked songs.
-       Library
-  Big Hoops (Bigger The Better) \ The Spirit Indestructible \ Nelly Furtado
-l  89-90spm
-  Big Hoops (Bigger The Better) \ The Spirit Indestructible \ Nelly Furtado
-=#
 using REPL
 using REPL.LineEdit 
 using REPL: LineEditREPL
 using Base: @kwdef, text_colors #, active_repl
+using Markdown
 using DataFrames
 import DataFrames.PrettyTables
 import DataFrames.PrettyTables: _render_text
 using Spotify
 using Spotify: SpType
-using Spotify.Player, Spotify.Playlists, Spotify.Tracks
+using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
 
 import Spotify.JSON3
 import CSV
@@ -32,13 +23,16 @@ import Base: tryparse, show
 export Spotify
 export SpId, SpCategoryId, SpPlaylistId, SpAlbumId, SpTrackId
 export SpArtistId
+export Player
+#, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
+
 export JSON3
 export PlaylistRef, TrackRef, authorize, DataFrame
 
 export TDF
 export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snapshot_in_data
 export is_track_in_data
-export tracks_data_get
+export tracks_data_get, save_tracks_data
 
 """
 TDF[] to access tracks_data in memory. Each row contains a track, features and which playlists refer it.
@@ -49,6 +43,7 @@ include("types.jl")
 include("playlist_interface_functions.jl")
 include("player_interface_functions.jl")
 include("library_interface_functions.jl")
+include("artist_interface_functions.jl")
 include("utilties_interface_functions.jl")
 include("tracks_dataframe_functions.jl")
 include("tracks_dataframe_lookup_functions.jl")
@@ -67,9 +62,11 @@ function __init__()
 
     # This gets the current subscribed playlists, and creates 
     # or updates a local tracks data file and in-memory copy:
-    #TDF[] = tracks_data_get(;silent = true)
-    #save_tracks_data(TDF[])
-    #
+    TDF[] = tracks_data_get(;silent = true)
+    if ! isempty(TDF[])
+        save_tracks_data(TDF[])
+    end
+
     # Configure miniprompt, then tell Julia about it. 
 
     @assert isdefined(Base, :isinteractive)

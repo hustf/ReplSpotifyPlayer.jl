@@ -13,7 +13,7 @@ function track_album_artists_print(ioc, item::JSON3.Object)
         track_id = SpTrackId(item.id)
         print(ioc, "  ")
         show(ioc, MIME("text/plain"), track_id)
-        color_reset(ioc)
+        color_set(ioc)
     end
     nothing
 end
@@ -24,16 +24,20 @@ end
 """
 function track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object)
     @assert ! isempty(otherthan)
-    if otherthan.type == "collection"
+    if otherthan.type == "collection" || otherthan.type == "album"
         otherthan_playlistid =  SpPlaylistId("1234567890123456789012")
-    else
+    elseif otherthan.type == "playlist"
         otherthan_playlistid =  SpPlaylistId(otherthan.uri)
+    else
+        @show otherthan
+        throw("didn't think of that")
     end
     plls = map(t-> t.id, playlistrefs_containing_track(track_id))
     other_playlists = filter(l -> l !== otherthan_playlistid, plls)
     for l in other_playlists
         print(ioc, "       ")
         playlist_details_print(ioc, l)
+        color_set(ioc)
         println(ioc)
     end
     length(other_playlists) > 0 ? true : false

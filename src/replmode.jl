@@ -22,20 +22,23 @@ function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::Ab
     act_on_keystroke(char)
 end
 
-color_set(io, col::Union{Int64, Symbol}) = color_set(io, text_colors[col])
-function color_set(io, col::String)
-    print(io, col)
-    IOContext(io, :outercolor => col)
+function color_set(io, col::Union{Int64, Symbol})
+      ioc = IOContext(io, :context_color => col)
+      color_set(ioc)
+      ioc
 end
-function color_reset(ioc::IO)
-    print(ioc, get(ioc, :outercolor, text_colors[:normal]))
+function color_set(ioc::IO)
+    col = get(ioc, :context_color, :normal)
+    print(ioc, text_colors[col])
     nothing
 end
 
+const IO_DICT = Dict(:context_color => :green, :print_ids => false)
 function act_on_keystroke(char)
     # Most calls from here on
     # will print something. 
-    ioc = IOContext(color_set(stdout, :green), :print_ids => false)
+    ioc = IOContext(stdout, IO_DICT...)
+    color_set(ioc)
     c = char[1]
     if c == 'b' || char == "\e[D"
         player_skip_to_previous()
@@ -53,21 +56,34 @@ function act_on_keystroke(char)
     elseif c == 'l'
         io = color_set(ioc, :light_blue)
         print(io, "  ")
-        current_playlist_context_print(io)
-        color_reset(ioc)
+        current_context_print(io)
+        color_set(ioc)
     elseif char == "\e[3~"  || char == "\e\b"
         io = color_set(stdout, :red)
         print(io, "  ")
         delete_current_playing_from_owned_print(io)
-        color_reset(ioc)
+        color_set(ioc)
     elseif c == 'a'
         io = color_set(ioc, 176)
         println(io)
         current_audio_features_print(ioc)
-        color_reset(ioc)
+        color_set(ioc)
     elseif '0' <= c <= '9'
         print(ioc, " ")
         seek_in_track_print(ioc, Meta.parse(string(c)))
+    elseif c == 'i'
+        if get(ioc, :print_ids, false)
+            println(ioc, "No ids from now on")
+            push!(IO_DICT, :print_ids => false)
+        else
+            println(ioc, "Including ids from now on")
+            push!(IO_DICT, :print_ids => true)
+        end
+        ioc = IOContext(stdout, IO_DICT...)
+    elseif c == 's'
+        io = color_set(ioc, :normal)
+        help_seek_syntax_print(io)
+        color_set(ioc)
     end
     # After the command, a line with the current state:
     print(ioc, "  ")
@@ -86,6 +102,7 @@ function print_menu()
     menu = """
        ¨e : exit.    ¨f(¨→) : forward.  ¨b(¨←) : back.  ¨p: pause, play.  ¨0-9:  seek.
        ¨a : analysis.   ¨l : playlist.      ¨del(¨fn + ¨⌫  ) : delete from playlist.
+       ¨i : toggle ids. ¨s : search syntax.    
     """
     menu = replace(menu, "¨" => b , ":" =>  "$n$l:", "." => ".$n", " or" => "$n$l or$n", "+" => "$n+", "(" => "$n(", ")" => "$n)")
     print(stdout, menu)
@@ -97,7 +114,8 @@ on_non_empty_enter(s) = print_menu_and_current_playing()
 
 function print_menu_and_current_playing()
     print_menu()
-    ioc = color_set(stdout, :green)
+    ioc = IOContext(stdout, IO_DICT...)
+    color_set(ioc)
     print(ioc, "  ")
     current_playing_print(ioc)
     nothing
@@ -185,6 +203,8 @@ function define_single_keystrokes!(special_prompt)
         special_prompt.keymap_dict['p'] = wrap_command
         special_prompt.keymap_dict['l'] = wrap_command
         special_prompt.keymap_dict['a'] = wrap_command
+        special_prompt.keymap_dict['i'] = wrap_command
+        special_prompt.keymap_dict['s'] = wrap_command
         special_prompt.keymap_dict['0'] = wrap_command
         special_prompt.keymap_dict['1'] = wrap_command
         special_prompt.keymap_dict['2'] = wrap_command

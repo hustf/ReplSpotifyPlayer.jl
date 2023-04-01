@@ -10,33 +10,46 @@ function current_playing_print(ioc)
     # Ref. delay https://github.com/spotify/web-api/issues/821#issuecomment-381423071
     st = get_player_state(ioc)
     isempty(st) && return false
-    @assert ! isnothing(st.item)
-    track_album_artists_print(ioc, st.item)
+    if ! isnothing(st.item)
+        track_album_artists_print(ioc, st.item)
+    elseif st.currently_playing_type == "unknown"
+        print(ioc, "currently playing type: unknown")
+    end
     println(ioc)
     true
 end
 """
-    current_playlist_context_print(ioc) -> Bool
+    current_context_print(ioc) -> Bool
+
+Shows the playlist name or Library. Also where else the current track appears.
 
 Please wait 1 second after changes for correct info.
 """
-function current_playlist_context_print(ioc)
+function current_context_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     if isnothing(st.context)
         io = color_set(ioc, :red)
         print(io, "No current context")
-        color_reset(ioc)
+        color_set(ioc)
         return true
     end
-    playlist_details_print(ioc, st.context)
+    if st.context.type == "playlist" || st.context.type == "collection"
+        playlist_details_print(ioc, st.context)
+    elseif st.context.type == "artist"
+        artist_details_print(ioc, st.context.uri)
+    else
+        throw("Didn't think of $(st.context.type)")
+    end
     # Also check if we have played past the end of the playlist and continued into the 'recommendations'.
-    track_id = SpTrackId(st.item.uri)
+
     if st.context.type == "collection"
+        track_id = SpTrackId(st.item.uri)
         if ! is_track_in_library(track_id)
-            print(ioc, " Past end. In 'recommendations'")
+            print(ioc, " Past end. In 'recommendations'.")
         end
     elseif st.context.type == "playlist"
+        track_id = SpTrackId(st.item.uri)
         playlist_id = SpPlaylistId(st.context.uri)
         # We don't know if this playlist is owned by user yet.
         # is_track_in_playlist makes an api call, so avoid if the first returns true
@@ -45,15 +58,15 @@ function current_playlist_context_print(ioc)
        end
     end
     println(ioc)
-    # Now also print where the track also appears.
-    io = color_set(ioc, :light_black)
-    track_also_in_playlists_print(ioc, track_id, st.context)
-    if st.context.type == "collection"
-        if is_track_in_library(track_id)
+    if st.context.type !== "artist"
+        # Now also print where the track also appears.
+        io = color_set(ioc, :light_black)
+        track_also_in_playlists_print(io, track_id, st.context)
+        if st.context.type !== "collection" && is_track_in_library(track_id)
             println(io, "       Library")
         end
+        color_set(ioc)
     end
-    color_reset(ioc)
     true
 end
 
@@ -134,3 +147,33 @@ function seek_in_track_print(ioc, decile)
     true
 end
 
+"""
+    help_seek_syntax_print(ioc) -> Bool
+
+Some suggestions for using the DataFrame syntax with Spotify.jl and this package.
+"""
+function help_seek_syntax_print(ioc)
+    mymd = md"""
+
+Exit the replmode by pressing 'e'. 
+
+## Save typing with shorthand single-argument functions:
+
+```julia-repl
+julia> playtracks(x) = begin;Player.player_resume_playback(;uris = x);println(length(x));end
+```
+
+# Use the tracks dataframe TDF! 
+```julia-repl
+julia> filter(:trackname => n -> contains(n, " love "), TDF[])[!, :trackid] |> playtracks
+1-element Vector{SpTrackId}:
+ spotify:track:7IQlwZBtL05beQqJCpCaZA
+
+ julia> player_resume_playback(;uris = v)
+ ({}, 0)
+```
+
+    """
+    show(ioc, MIME("text/plain"),mymd)
+    true
+end

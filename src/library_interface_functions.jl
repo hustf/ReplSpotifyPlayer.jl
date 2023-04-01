@@ -15,7 +15,7 @@ function delete_track_from_library_print(ioc, track_id, item::JSON3.Object)
         print(io, "Going to delete \"")
         track_album_artists_print(io, item)
         println(io, "\" from your library.")
-        color_reset(ioc)
+        color_set(ioc)
         Spotify.Tracks.tracks_remove_from_library([track_id])
         return true
     else
@@ -23,7 +23,7 @@ function delete_track_from_library_print(ioc, track_id, item::JSON3.Object)
         print(io, "  ❌ Can't delete \"")
         track_album_artists_print(ioc, item)
         println(io, "\"\n  - Not in library.")
-        color_reset(ioc)
+        color_set(ioc)
         return false
     end
 end

@@ -168,8 +168,6 @@ function tracks_data_append!(tracks_data::DataFrame, pl_ref::PlaylistRef, track_
                     select!(tracks_data, 1:colprev)
                     @assert ncol(tracks_data) == colprev
                 else
-                    # TODO Check probable bug when updating a playlist to a new version.
-                    @show id name pl_ref rkeep (colprev + 1)
                     ! silent && println(stdout, "    -*Track ", name, " also appears in playlist ", pl_ref.name)
                 end
             end
@@ -190,7 +188,7 @@ function tracks_data_append_audio_features!(tracks_data; silent = true)
             if ! silent
                 REPL.Terminals.clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
                 print(stdout, "   ", round(i / nr; digits = 2))
-                sleep(0.01)
+                sleep(0.002)
             end
         end
     end

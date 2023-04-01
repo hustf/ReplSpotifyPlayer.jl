@@ -95,15 +95,14 @@ end
 "playlist_details_print(context::JSON3.Object) -> nothing"
 function playlist_details_print(ioc, context::JSON3.Object)
     if context.type !== "playlist"
-        print(ioc, "Context is not playlist.")
         if context.type == "collection"
-            print(ioc, " It is library / liked songs.")
+            print(ioc, "Library / liked songs.")
         elseif context.type == "album"
-            print(ioc, " It is album as shown in `")
+            print(ioc, " Context is album as shown in `")
             printstyled(ioc, "track \\ album \\ artist", color = :green)
             print(ioc, "`")
         else
-            print(ioc, " It is $(context.type)")
+            print(ioc, " Context is not Library, Playlist or Album. It is $(context.type)")
         end
         return
     end
