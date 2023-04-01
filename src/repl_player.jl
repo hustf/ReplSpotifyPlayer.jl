@@ -28,44 +28,52 @@ Please wait 1 second after changes for correct info.
 function current_context_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
+    track_id = SpTrackId(st.item.uri)
     if isnothing(st.context)
         io = color_set(ioc, :red)
-        print(io, "No current context")
-        color_set(ioc)
-        return true
-    end
-    if st.context.type == "playlist" || st.context.type == "collection"
-        playlist_details_print(ioc, st.context)
-    elseif st.context.type == "artist"
-        artist_details_print(ioc, st.context.uri)
+        print(io, "No current context.")
     else
-        throw("Didn't think of $(st.context.type)")
-    end
-    # Also check if we have played past the end of the playlist and continued into the 'recommendations'.
-
-    if st.context.type == "collection"
-        track_id = SpTrackId(st.item.uri)
-        if ! is_track_in_library(track_id)
-            print(ioc, " Past end. In 'recommendations'.")
+        if st.context.type == "playlist" || st.context.type == "collection"
+            playlist_details_print(ioc, st.context)
+        elseif st.context.type == "artist"
+            artist_details_print(ioc, st.context.uri)
+        elseif st.context.type == "album"
+            album_details_print(ioc, st.context.uri)
+        else
+            throw("Didn't think of $(st.context.type)")
         end
-    elseif st.context.type == "playlist"
-        track_id = SpTrackId(st.item.uri)
-        playlist_id = SpPlaylistId(st.context.uri)
-        # We don't know if this playlist is owned by user yet.
-        # is_track_in_playlist makes an api call, so avoid if the first returns true
-       if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
-           print(ioc, " Past end, in 'recommendations'")
-       end
+        # Also check if we have played past the end of the playlist and continued into the 'recommendations'.
+        if st.context.type == "collection"
+            if ! is_track_in_library(track_id)
+                print(ioc, " Past end. In 'recommendations'.")
+            end
+        elseif st.context.type == "playlist"
+            playlist_id = SpPlaylistId(st.context.uri)
+            # We don't know if this playlist is owned by user yet.
+            # is_track_in_playlist makes an api call, so avoid if the first returns true
+            if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
+                print(ioc, " Past end, in 'recommendations'")
+            end
+        end
     end
     println(ioc)
-    if st.context.type !== "artist"
-        # Now also print where the track also appears.
-        io = color_set(ioc, :light_black)
-        track_also_in_playlists_print(io, track_id, st.context)
-        if st.context.type !== "collection" && is_track_in_library(track_id)
-            println(io, "       Library")
-        end
+    if isnothing(st.context) || st.context.type == "artist"
         color_set(ioc)
+        # Print where, if anywhere, this track appears in our playlists and library.
+        track_also_in_playlists_print(ioc, track_id, JSON3.Object())
+        if is_track_in_library(track_id)
+            println(ioc, "       Library")
+        end
+    else
+        #if st.context.type !== "artist"
+            # Now also print where the track also appears.
+            io = color_set(ioc, :light_black)
+            track_also_in_playlists_print(io, track_id, st.context)
+            if st.context.type !== "collection" && is_track_in_library(track_id)
+                println(io, "       Library")
+            end
+            color_set(ioc)
+        #end
     end
     true
 end
@@ -163,17 +171,24 @@ Exit the replmode by pressing 'e'.
 julia> playtracks(x) = begin;Player.player_resume_playback(;uris = x);println(length(x));end
 ```
 
-# Use the tracks dataframe TDF! 
-```julia-repl
-julia> filter(:trackname => n -> contains(n, " love "), TDF[])[!, :trackid] |> playtracks
-1-element Vector{SpTrackId}:
- spotify:track:7IQlwZBtL05beQqJCpCaZA
+(`playtracks` is already defined and exported by this module.)
 
- julia> player_resume_playback(;uris = v)
- ({}, 0)
+# Examples
+Seek for " love " in the Tracks DataFrame TDF[] and play all results.
+
+```julia-repl
+julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
+12
 ```
 
-    """
+Seek for unusual pulses and play those tracks! See `metronome` for checking your versus Spotify's sense of rhythm!
+```julia-repl
+julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
+130
+```
+"""
     show(ioc, MIME("text/plain"),mymd)
+    println(ioc)
     true
 end
+

@@ -12,8 +12,8 @@ function artist_details_print(ioc, artist_id::SpArtistId)
     print(ioc, o.name)
     io = color_set(ioc, :normal)
     print(io, "  followers: ", o.followers.total)
-    println(io, "  genres: ", o.genres)
-    print(io, "images: ", length(o.images))
+    print(io, "  genres: ", o.genres)
+    print(io, "  images: ", length(o.images))
     color_set(ioc)
     # TODO: consider using images.
     nothing

@@ -23,17 +23,24 @@ end
     track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object) -> Bool
 """
 function track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object)
-    @assert ! isempty(otherthan)
-    if otherthan.type == "collection" || otherthan.type == "album"
-        otherthan_playlistid =  SpPlaylistId("1234567890123456789012")
-    elseif otherthan.type == "playlist"
-        otherthan_playlistid =  SpPlaylistId(otherthan.uri)
+    if ! isempty(otherthan)
+        if otherthan.type == "collection" || otherthan.type == "album"
+            otherthan_playlistid =  SpPlaylistId("1234567890123456789012")
+        elseif otherthan.type == "playlist"
+            otherthan_playlistid =  SpPlaylistId(otherthan.uri)
+        else
+            @show otherthan
+            throw("didn't think of that")
+        end
     else
-        @show otherthan
-        throw("didn't think of that")
+        println("CHECL")
+        otherthan_playlistid =  SpPlaylistId("1234567890123456789012")
     end
     plls = map(t-> t.id, playlistrefs_containing_track(track_id))
     other_playlists = filter(l -> l !== otherthan_playlistid, plls)
+    if ! isempty(other_playlists) && isempty(otherthan)
+        println(ioc, " Current track is used in:")
+    end
     for l in other_playlists
         print(ioc, "       ")
         playlist_details_print(ioc, l)

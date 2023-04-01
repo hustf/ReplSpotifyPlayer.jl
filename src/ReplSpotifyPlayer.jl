@@ -15,7 +15,7 @@ import DataFrames.PrettyTables
 import DataFrames.PrettyTables: _render_text
 using Spotify
 using Spotify: SpType
-using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
+using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists, Spotify.Albums
 
 import Spotify.JSON3
 import CSV
@@ -24,6 +24,7 @@ export Spotify
 export SpId, SpCategoryId, SpPlaylistId, SpAlbumId, SpTrackId
 export SpArtistId
 export Player
+export Albums
 #, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
 
 export JSON3
@@ -33,6 +34,7 @@ export TDF
 export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snapshot_in_data
 export is_track_in_data
 export tracks_data_get, save_tracks_data
+export metronome, playtracks
 
 """
 TDF[] to access tracks_data in memory. Each row contains a track, features and which playlists refer it.
@@ -44,12 +46,14 @@ include("playlist_interface_functions.jl")
 include("player_interface_functions.jl")
 include("library_interface_functions.jl")
 include("artist_interface_functions.jl")
+include("album_interface_functions.jl")
 include("utilties_interface_functions.jl")
 include("tracks_dataframe_functions.jl")
 include("tracks_dataframe_lookup_functions.jl")
 include("tracks_dataframe_io.jl")
 include("replmode.jl")
 include("repl_player.jl")
+include("utilties.jl")
 
 function __init__()
     # Consider: 
