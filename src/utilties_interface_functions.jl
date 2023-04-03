@@ -33,7 +33,6 @@ function track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object)
             throw("didn't think of that")
         end
     else
-        println("CHECL")
         otherthan_playlistid =  SpPlaylistId("1234567890123456789012")
     end
     plls = map(t-> t.id, playlistrefs_containing_track(track_id))

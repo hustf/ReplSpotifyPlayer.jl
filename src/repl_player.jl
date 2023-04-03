@@ -33,15 +33,17 @@ function current_context_print(ioc)
         io = color_set(ioc, :red)
         print(io, "No current context.")
     else
-        if st.context.type == "playlist" || st.context.type == "collection"
+        type = st.context.type
+        if type == "playlist" || type == "collection" || type == "single"
             playlist_details_print(ioc, st.context)
-        elseif st.context.type == "artist"
+        elseif type == "artist"
             artist_details_print(ioc, st.context.uri)
-        elseif st.context.type == "album"
+        elseif type == "album"
             album_details_print(ioc, st.context.uri)
         else
-            throw("Didn't think of $(st.context.type)")
+            throw("Didn't think of $(string(type))")
         end
+        # 
         # Also check if we have played past the end of the playlist and continued into the 'recommendations'.
         if st.context.type == "collection"
             if ! is_track_in_library(track_id)
@@ -64,16 +66,17 @@ function current_context_print(ioc)
         if is_track_in_library(track_id)
             println(ioc, "       Library")
         end
+        if ! isnothing(st.context)
+            artist_tracks_in_data_print(ioc, st.context.uri)
+        end
     else
-        #if st.context.type !== "artist"
-            # Now also print where the track also appears.
-            io = color_set(ioc, :light_black)
-            track_also_in_playlists_print(io, track_id, st.context)
-            if st.context.type !== "collection" && is_track_in_library(track_id)
-                println(io, "       Library")
-            end
-            color_set(ioc)
-        #end
+        # Now also print where the track also appears.
+        io = color_set(ioc, :light_black)
+        track_also_in_playlists_print(io, track_id, st.context)
+        if st.context.type !== "collection" && is_track_in_library(track_id)
+            println(io, "       Library")
+        end
+        color_set(ioc)
     end
     true
 end
@@ -192,3 +195,52 @@ julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :tr
     true
 end
 
+"""
+    current_artist_and_tracks_in_data_print(ioc)
+"""
+function current_artist_and_tracks_in_data_print(ioc)
+    st = get_player_state(ioc)
+    isempty(st) && return false
+    if isnothing(st.item)
+        io = color_set(ioc, :red)
+        print(io, "No current item.")
+        color_set(ioc)
+    else
+        artist_and_tracks_in_data_print(ioc, st.item)
+    end
+end
+
+
+"""
+    current_metronome_print(ioc)  -> Bool
+
+Audio features in two columns.
+"""
+function current_metronome_print(ioc)
+    st = get_player_state(ioc)
+    isempty(st) && return false
+    curitem = st.item
+    current_playing_id = curitem.id
+    af = tracks_get_audio_features( current_playing_id)[1]
+    isempty(af) && return false
+    bpm = af.tempo
+    bpb = Int(af.time_signature)
+    duration_s = af.duration_ms / 1000
+    position_s = get_player_state(ioc).progress_ms / 1000
+    bars_per_minute = bpm / bpb
+    bars = Int(round(duration_s * bars_per_minute / 60 ))
+    current_bar = Int(round(position_s * bars_per_minute / 60))
+    remaining_bars = bars - current_bar
+
+    println(ioc)
+    println(ioc, lpad("Tempo            $(bpm)", 40) * " [Beats Per Minute]")
+    println(ioc, lpad("Time_signature        $(bpb)", 40), " [Beats Per Bar]")
+    println(ioc, lpad("Duration        $(duration_s)", 40), " [s]")
+    println(ioc, lpad("Position        $(position_s)", 40), " [s]")
+    println(ioc, lpad("Bars            $(bars)", 40))
+    println(ioc, lpad("Current bars    $(current_bar)", 40))
+    println(ioc, lpad("Remaining bars  $(remaining_bars)", 40))
+    println(ioc)
+    @async metronome(bpm, bpb; bars = remaining_bars)
+    true
+end

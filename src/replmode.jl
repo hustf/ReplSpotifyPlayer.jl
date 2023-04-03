@@ -33,7 +33,7 @@ function color_set(ioc::IO)
     nothing
 end
 
-const IO_DICT = Dict(:context_color => :green, :print_ids => false)
+const IO_DICT = Dict(:context_color => :green, :print_ids => false, :silent => false)
 function act_on_keystroke(char)
     # Most calls from here on
     # will print something. 
@@ -84,6 +84,14 @@ function act_on_keystroke(char)
         io = color_set(ioc, :normal)
         help_seek_syntax_print(io)
         color_set(ioc)
+    elseif c == 'm'
+        io = color_set(ioc, :yellow)
+        current_artist_and_tracks_in_data_print(ioc)
+        color_set(ioc)
+    elseif c == 'r'
+        io = color_set(ioc, :normal)
+        current_metronome_print(ioc)
+        color_set(ioc)
     end
     # After the command, a line with the current state:
     print(ioc, "  ")
@@ -101,8 +109,8 @@ function print_menu()
     n = text_colors[:normal]
     menu = """
        ¨e : exit.    ¨f(¨→) : forward.  ¨b(¨←) : back.  ¨p: pause, play.  ¨0-9:  seek.
-       ¨a : analysis.   ¨l : playlist.      ¨del(¨fn + ¨⌫  ) : delete from playlist.
-       ¨i : toggle ids. ¨s : search syntax.    
+       ¨a : analysis.    ¨l : context.       ¨del(¨fn + ¨⌫  ) : delete from playlist.
+       ¨i : toggle ids.     ¨s : search syntax.      ¨m : musician.      ¨r : rhythm.
     """
     menu = replace(menu, "¨" => b , ":" =>  "$n$l:", "." => ".$n", " or" => "$n$l or$n", "+" => "$n+", "(" => "$n(", ")" => "$n)")
     print(stdout, menu)
@@ -197,6 +205,7 @@ end
 
 function define_single_keystrokes!(special_prompt)
     # Single keystroke commands. Sorry for any ugliness.
+    # Take care to check; some keys won't work.
     let
         special_prompt.keymap_dict['b'] = wrap_command
         special_prompt.keymap_dict['f'] = wrap_command
@@ -205,6 +214,8 @@ function define_single_keystrokes!(special_prompt)
         special_prompt.keymap_dict['a'] = wrap_command
         special_prompt.keymap_dict['i'] = wrap_command
         special_prompt.keymap_dict['s'] = wrap_command
+        special_prompt.keymap_dict['m'] = wrap_command
+        special_prompt.keymap_dict['r'] = wrap_command
         special_prompt.keymap_dict['0'] = wrap_command
         special_prompt.keymap_dict['1'] = wrap_command
         special_prompt.keymap_dict['2'] = wrap_command

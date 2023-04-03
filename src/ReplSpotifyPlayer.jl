@@ -14,8 +14,8 @@ using DataFrames
 import DataFrames.PrettyTables
 import DataFrames.PrettyTables: _render_text
 using Spotify
-using Spotify: SpType
-using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists, Spotify.Albums
+using Spotify: SpType, get_user_country
+using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists, Spotify.Albums, Spotify.Search
 
 import Spotify.JSON3
 import CSV
@@ -25,6 +25,7 @@ export SpId, SpCategoryId, SpPlaylistId, SpAlbumId, SpTrackId
 export SpArtistId
 export Player
 export Albums
+
 #, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
 
 export JSON3
@@ -35,6 +36,7 @@ export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snap
 export is_track_in_data
 export tracks_data_get, save_tracks_data
 export metronome, playtracks
+export artist_get_all_albums
 
 """
 TDF[] to access tracks_data in memory. Each row contains a track, features and which playlists refer it.
@@ -58,11 +60,11 @@ include("utilties.jl")
 function __init__()
     # Consider: 
     # Is it more irritating to get the pop-ups while playing?
-    # repl_layer_default_scopes = ["user-read-private", "user-modify-playback-state", "user-read-playback-state", "playlist-modify-private", 
-    #  "playlist-read-private", "playlist-read-collaborative", "user-library-read"]
-    #if ! Spotify.credentials_contain_scope(repl_player_default_scopes)
-    #apply_and_wait_for_implicit_grant(;scopes= mini_player_default_scopes)
-    #end
+    repl_player_default_scopes = ["user-read-private", "user-modify-playback-state", "user-read-playback-state", "playlist-modify-private", 
+        "playlist-read-private", "playlist-read-collaborative", "user-library-read"]
+    if ! Spotify.credentials_contain_scope(repl_player_default_scopes)
+        apply_and_wait_for_implicit_grant(;scopes = repl_player_default_scopes)
+    end
 
     # This gets the current subscribed playlists, and creates 
     # or updates a local tracks data file and in-memory copy:

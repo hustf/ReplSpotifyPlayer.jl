@@ -88,10 +88,6 @@ function insert_audio_feature_vals!(trackrefs_rw)
 end
 
 
-
-
-
-
 "playlist_details_print(context::JSON3.Object) -> nothing"
 function playlist_details_print(ioc, context::JSON3.Object)
     if context.type !== "playlist"
@@ -202,13 +198,13 @@ function playlist_owned_refs_get(;silent = true)
     batchsize = 50
     playlistrefs = Vector{PlaylistRef}()
     user_id  = get_user_name()
+    ! silent && println(stdout, "Retrieving playlists currently subscribed to:")
     for batchno = 0:200
         json, waitsec = Spotify.Playlists.playlist_get_current_user(limit = batchsize, offset = batchno * batchsize)
         isempty(json) && break
         waitsec > 0 && throw("Too fast, whoa!")
         l = length(json.items)
         l == 0 && break
-        ! silent && batchno == 0 && println(stdout, "Retrieving playlists currently subscribed to:")
         for item in json.items
             if item.owner.display_name == user_id 
                 ! silent && print(stdout, item.name, "    ")
@@ -280,6 +276,17 @@ function playlist_details_print(ioc, playlist_id::SpPlaylistId)
     if get(ioc, :print_ids, false)
         print(ioc, "  ")
         show(ioc, MIME("text/plain"), playlist_id)
+    end
+    nothing
+end
+
+"playlist_nodetails_print(playlist_id::SpPlaylistId)"
+function playlist_nodetails_print(ioc, playlist_ref::PlaylistRef)
+    print(ioc, playlist_ref.name)
+    if get(ioc, :print_ids, false)
+        print(ioc, "  ")
+        show(ioc, MIME("text/plain"), playlist_ref.id)
+        color_set(ioc)
     end
     nothing
 end
