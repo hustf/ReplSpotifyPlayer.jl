@@ -11,11 +11,13 @@ using REPL: LineEditREPL
 using Base: @kwdef, text_colors #, active_repl
 using Markdown
 using DataFrames
+using UnicodePlots
 import DataFrames.PrettyTables
 import DataFrames.PrettyTables: _render_text
 using Spotify
 using Spotify: SpType, get_user_country
 using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists, Spotify.Albums, Spotify.Search
+using Statistics
 
 import Spotify.JSON3
 import CSV
@@ -34,12 +36,14 @@ export PlaylistRef, TrackRef, authorize, DataFrame
 export TDF
 export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snapshot_in_data
 export is_track_in_data
-export tracks_data_get, save_tracks_data
+export tracks_data_load_and_update, save_tracks_data
 export metronome, playtracks
 export artist_get_all_albums
 
 """
-TDF[] to access tracks_data in memory. Each row contains a track, features and which playlists refer it.
+TDF[] to access tracks_data currently in memory. Each row contains a track, features and which playlists refer it.
+
+The preferred way is `tracks_data_update()`, which is quite fast too, and saves to disk.
 """
 const TDF = Ref{DataFrame}(DataFrame())
 const PLAYERprompt = Ref{LineEdit.Prompt}()
@@ -57,9 +61,7 @@ include("replmode.jl")
 include("repl_player.jl")
 include("utilties.jl")
 
-function __init__()
-    # Consider: 
-    # Is it more irritating to get the pop-ups while playing?
+function init()
     repl_player_default_scopes = ["user-read-private", "user-modify-playback-state", "user-read-playback-state", "playlist-modify-private", 
         "playlist-read-private", "playlist-read-collaborative", "user-library-read"]
     if ! Spotify.credentials_contain_scope(repl_player_default_scopes)
@@ -68,11 +70,8 @@ function __init__()
 
     # This gets the current subscribed playlists, and creates 
     # or updates a local tracks data file and in-memory copy:
-    TDF[] = tracks_data_get(;silent = true)
-    if ! isempty(TDF[])
-        save_tracks_data(TDF[])
-    end
-
+    tracks_data_update()
+    
     # Configure miniprompt, then tell Julia about it. 
 
     @assert isdefined(Base, :isinteractive)
@@ -81,5 +80,9 @@ function __init__()
     PLAYERprompt[] = add_seventh_prompt_mode(Base.active_repl) 
     define_single_keystrokes!(PLAYERprompt[])
     @info "Type : to enter mini player mode, e to exit."
+end
+
+function __init__()
+    init()
 end
 end # module

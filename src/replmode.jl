@@ -12,6 +12,9 @@
 # Shortcuts are defined in keymap_dict, but
 # what it then does is specificed in `wrap_command`.
 
+# TODO: o for output the last track.
+# TODO: key for moving to an owned playlist, select from list and remember the last choice.
+
 function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     # This buffer contain other characters typed so far.
     iobuffer = LineEdit.buffer(state)
@@ -80,7 +83,7 @@ function act_on_keystroke(char)
             push!(IO_DICT, :print_ids => true)
         end
         ioc = IOContext(stdout, IO_DICT...)
-    elseif c == 's'
+    elseif c == '?'
         io = color_set(ioc, :normal)
         help_seek_syntax_print(io)
         color_set(ioc)
@@ -91,6 +94,10 @@ function act_on_keystroke(char)
     elseif c == 'r'
         io = color_set(ioc, :normal)
         current_metronome_print(ioc)
+        color_set(ioc)
+    elseif c == 't'
+        io = color_set(ioc, :normal)
+        current_typicality_print(ioc)
         color_set(ioc)
     end
     # After the command, a line with the current state:
@@ -110,7 +117,7 @@ function print_menu()
     menu = """
        ¨e : exit.    ¨f(¨→) : forward.  ¨b(¨←) : back.  ¨p: pause, play.  ¨0-9:  seek.
        ¨a : analysis.    ¨l : context.       ¨del(¨fn + ¨⌫  ) : delete from playlist.
-       ¨i : toggle ids.     ¨s : search syntax.      ¨m : musician.      ¨r : rhythm.
+       ¨i : toggle ids.  ¨m : musician.  ¨r : rhythm.  ¨t : typicality.  ¨? : syntax.
     """
     menu = replace(menu, "¨" => b , ":" =>  "$n$l:", "." => ".$n", " or" => "$n$l or$n", "+" => "$n+", "(" => "$n(", ")" => "$n)")
     print(stdout, menu)
@@ -207,25 +214,27 @@ function define_single_keystrokes!(special_prompt)
     # Single keystroke commands. Sorry for any ugliness.
     # Take care to check; some keys won't work.
     let
-        special_prompt.keymap_dict['b'] = wrap_command
-        special_prompt.keymap_dict['f'] = wrap_command
-        special_prompt.keymap_dict['p'] = wrap_command
-        special_prompt.keymap_dict['l'] = wrap_command
-        special_prompt.keymap_dict['a'] = wrap_command
-        special_prompt.keymap_dict['i'] = wrap_command
-        special_prompt.keymap_dict['s'] = wrap_command
-        special_prompt.keymap_dict['m'] = wrap_command
-        special_prompt.keymap_dict['r'] = wrap_command
-        special_prompt.keymap_dict['0'] = wrap_command
-        special_prompt.keymap_dict['1'] = wrap_command
-        special_prompt.keymap_dict['2'] = wrap_command
-        special_prompt.keymap_dict['3'] = wrap_command
-        special_prompt.keymap_dict['4'] = wrap_command
-        special_prompt.keymap_dict['5'] = wrap_command
-        special_prompt.keymap_dict['6'] = wrap_command
-        special_prompt.keymap_dict['7'] = wrap_command
-        special_prompt.keymap_dict['8'] = wrap_command
-        special_prompt.keymap_dict['9'] = wrap_command
+        d = special_prompt.keymap_dict
+        d['b'] = wrap_command
+        d['f'] = wrap_command
+        d['p'] = wrap_command
+        d['l'] = wrap_command
+        d['a'] = wrap_command
+        d['i'] = wrap_command
+        d['?'] = wrap_command
+        d['m'] = wrap_command
+        d['r'] = wrap_command
+        d['t'] = wrap_command
+        d['0'] = wrap_command
+        d['1'] = wrap_command
+        d['2'] = wrap_command
+        d['3'] = wrap_command
+        d['4'] = wrap_command
+        d['5'] = wrap_command
+        d['6'] = wrap_command
+        d['7'] = wrap_command
+        d['8'] = wrap_command
+        d['9'] = wrap_command
         # The structure is nested for special keystrokes.
         special_dict = special_prompt.keymap_dict['\e']
         very_special_dict = special_dict['[']

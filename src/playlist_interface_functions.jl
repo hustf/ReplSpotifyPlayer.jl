@@ -150,8 +150,7 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
     else
         printstyled(ioc, "This deletion may take minutes to show everywhere. The playlist's snapshot ID against which you deleted the track:\n", color = :green)
         sleep(1)
-        TDF[] = tracks_data_get(;silent = true)
-        save_tracks_data(TDF[])
+        tracks_data_update()
         println(ioc,  "  ", res.snapshot_id)
         return true
     end
@@ -273,15 +272,22 @@ function playlist_details_print(ioc, playlist_id::SpPlaylistId)
     if pld.public && plo_id == String(user_id)
         print(ioc, " (public, $(pld.total) followers)")
     end
+
     if get(ioc, :print_ids, false)
         print(ioc, "  ")
         show(ioc, MIME("text/plain"), playlist_id)
+        color_set(ioc)
+    end
+    if length(pld.tracks.items) < 100
+        print(ioc, "  ", length(pld.tracks.items), " tracks")
+    else
+        print(ioc, "  > 99 tracks")
     end
     nothing
 end
 
-"playlist_nodetails_print(playlist_id::SpPlaylistId)"
-function playlist_nodetails_print(ioc, playlist_ref::PlaylistRef)
+"playlist_no_details_print(playlist_id::SpPlaylistId)"
+function playlist_no_details_print(ioc, playlist_ref::PlaylistRef)
     print(ioc, playlist_ref.name)
     if get(ioc, :print_ids, false)
         print(ioc, "  ")

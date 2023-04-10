@@ -14,6 +14,8 @@ function current_playing_print(ioc)
         track_album_artists_print(ioc, st.item)
     elseif st.currently_playing_type == "unknown"
         print(ioc, "currently playing type: unknown")
+    else
+        print(ioc, "currently playing type: $(st.currently_playing_type)")
     end
     println(ioc)
     true
@@ -28,10 +30,17 @@ Please wait 1 second after changes for correct info.
 function current_context_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
+    if st.currently_playing_type !== "track"
+        io = color_set(ioc, :red)
+        print(io, "Not currently playing a track.")
+        color_set(ioc)
+        return false
+    end
     track_id = SpTrackId(st.item.uri)
     if isnothing(st.context)
         io = color_set(ioc, :red)
         print(io, "No current context.")
+        color_set(ioc)
     else
         type = st.context.type
         if type == "playlist" || type == "collection" || type == "single"
@@ -91,6 +100,11 @@ function delete_current_playing_from_owned_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     track_id = SpTrackId(st.item.uri)
+    if isnothing(st.context)
+        io = color_set(ioc, :red)
+        print(io, "No current context.")
+        color_set(ioc)
+    end
     if st.context.type == "collection"
         return delete_track_from_library_print(ioc, track_id, st.item)
     elseif st.context.type !== "playlist"
@@ -125,18 +139,25 @@ Audio features in two columns.
 function current_audio_features_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
-    curitem = st.item
-    current_playing_id = curitem.id
-    af = tracks_get_audio_features( current_playing_id)[1]
+    isnothing(st.item) && return false
+    if st.currently_playing_type !== "track"
+        io = color_set(ioc, :red)
+        print(io, "Not currently playing a track.")
+        color_set(ioc)
+        return false
+    end
+    track_id = SpTrackId(st.item.uri)
+     # Consider taking it from tracks data
+    af = tracks_get_stored_or_api_audio_features(track_id)
     if ! isempty(af)
-        println(ioc,  rpad("acousticness     $(af.acousticness)", 25)     * rpad("key               $(af.key)", 25))
-        println(ioc,  rpad("speechiness      $(af.speechiness)", 25)      * rpad("mode              $(af.mode)", 25))
-        println(ioc,  rpad("instrumentalness $(af.instrumentalness)", 25) * rpad("time_signature    $(af.time_signature)", 25))
-        println(ioc,  rpad("liveness         $(af.liveness)", 25)         * rpad("tempo             $(af.tempo)", 25))
-        println(ioc,  rpad("loudness         $(af.loudness)", 25)         * rpad("duration_ms       $(af.duration_ms)", 25))
-        println(ioc,  "energy           $( af.energy)")
-        println(ioc,  "danceability     $( af.danceability)")
-        println(ioc,  "valence          $( af.valence)")
+        println(ioc,  rpad("acousticness     $(af[:acousticness])", 25)     * rpad("key               $(af[:key])", 25))
+        println(ioc,  rpad("speechiness      $(af[:speechiness])", 25)      * rpad("mode              $(af[:mode])", 25))
+        println(ioc,  rpad("instrumentalness $(af[:instrumentalness])", 25) * rpad("time_signature    $(af[:time_signature])", 25))
+        println(ioc,  rpad("liveness         $(af[:liveness])", 25)         * rpad("tempo             $(af[:tempo])", 25))
+        println(ioc,  rpad("loudness         $(af[:loudness])", 25)         * rpad("duration_ms       $(af[:duration_ms])", 25))
+        println(ioc,  "energy           $( af[:energy])")
+        println(ioc,  "danceability     $( af[:danceability])")
+        println(ioc,  "valence          $( af[:valence])")
     end
     true
 end
@@ -149,6 +170,12 @@ Resume playing from decile 0-9 in current track, where 1 is 1 / 10 of track leng
 function seek_in_track_print(ioc, decile)
     st = get_player_state(ioc)
     isempty(st) && return false
+    isnothing(st.item) && return false
+    if st.currently_playing_type !== "track"
+        io = color_set(ioc, :red)
+        print(io, "Not currently playing a track.")
+        return false
+    end
     t = st.item.duration_ms
     new_progress_ms = Int(round(decile * t / 10))
     player_seek(new_progress_ms)
@@ -214,33 +241,88 @@ end
 """
     current_metronome_print(ioc)  -> Bool
 
-Audio features in two columns.
+Shows a beat / bar counter asyncronously until the end of track.
 """
 function current_metronome_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
-    curitem = st.item
-    current_playing_id = curitem.id
-    af = tracks_get_audio_features( current_playing_id)[1]
+    isnothing(st.item) && return false
+    if st.currently_playing_type !== "track"
+        io = color_set(ioc, :red)
+        print(io, "Not currently playing a track.")
+        color_set(ioc)
+        return false
+    end
+    track_id = SpTrackId(st.item.uri)
+    af = tracks_get_stored_or_api_audio_features(track_id)
     isempty(af) && return false
-    bpm = af.tempo
-    bpb = Int(af.time_signature)
-    duration_s = af.duration_ms / 1000
+    bpm = af[:tempo]
+    bpb = Int(af[:time_signature])
+    duration_s = af[:duration_ms]  / 1000
     position_s = get_player_state(ioc).progress_ms / 1000
     bars_per_minute = bpm / bpb
-    bars = Int(round(duration_s * bars_per_minute / 60 ))
-    current_bar = Int(round(position_s * bars_per_minute / 60))
-    remaining_bars = bars - current_bar
-
+    bars_in_track = Int(round(duration_s * bars_per_minute / 60 ))
+    current_bar = Int(round(position_s * bars_per_minute / 60)) + 1
+    bars = bars_in_track - current_bar
     println(ioc)
     println(ioc, lpad("Tempo            $(bpm)", 40) * " [Beats Per Minute]")
     println(ioc, lpad("Time_signature        $(bpb)", 40), " [Beats Per Bar]")
     println(ioc, lpad("Duration        $(duration_s)", 40), " [s]")
     println(ioc, lpad("Position        $(position_s)", 40), " [s]")
-    println(ioc, lpad("Bars            $(bars)", 40))
+    println(ioc, lpad("Bars in track    $(bars_in_track)", 40))
     println(ioc, lpad("Current bars    $(current_bar)", 40))
-    println(ioc, lpad("Remaining bars  $(remaining_bars)", 40))
+    println(ioc, lpad("Remaining bars  $(bars)", 40))
     println(ioc)
-    @async metronome(bpm, bpb; bars = remaining_bars)
+    metfunc(stop_channel) = metronome(bpm, bpb; bars, stop_channel)
+    # Run the defined metronome asyncronously
+    stop_channel = Channel(metfunc, 1)
+    println(ioc, "Press a key to stop metronome")
+    sleep(1 / (bpm / 60) * bpb)
+    # Wait for a key to stop metronome
+    read(stdin, 1)
+    if isopen(stop_channel) 
+        put!(stop_channel, 1)
+    end
+    println(ioc)
     true
 end
+
+
+"""
+    current_typicality_print(ioc)  -> Bool
+
+Compares current track with current context,
+i.e. selected audio features compared to 
+playlist or album values.
+"""
+function current_typicality_print(ioc)
+    st = get_player_state(ioc)
+    isempty(st) && return false
+    isnothing(st.item) && return false
+    if st.currently_playing_type !== "track"
+        io = color_set(ioc, :red)
+        print(io, "Not currently playing a track.")
+        color_set(ioc)
+        return false
+    end
+    track_id = SpTrackId(st.item.uri)
+    if isnothing(st.context) || st.context.type !== "playlist"
+        io = color_set(ioc, :red)
+        println(io, "Player context is not a playlist; cant find audio statistics.")
+        color_set(ioc)
+        return false
+    end
+    playlist_ref, playlist_data = playlist_get_latest_ref_and_data(st.context)
+    track_data = subset(playlist_data, :trackid => ByRow(==(track_id)))
+    if isempty(track_data)
+        io = color_set(ioc, :red)
+        println(io, "Past end of playlist, in 'recommendations'.")
+        color_set(ioc)
+        return false
+    end
+    rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
+    histograms_plot(ioc, rpd)
+    abnormality_rank_print(ioc, rpd)
+    abnormality_playlist_ranked_print(ioc, playlist_data)
+end
+

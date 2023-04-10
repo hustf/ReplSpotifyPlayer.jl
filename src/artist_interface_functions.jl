@@ -41,7 +41,7 @@ function artist_tracks_in_data_print(ioc, uri::String)
     nothing
 end
 function artist_tracks_in_data_print(ioc, artist_id::SpArtistId)
-    artist_tracks_in_data_print(ioc, artist_id, TDF[])
+    artist_tracks_in_data_print(ioc, artist_id, tracks_data_update())
 end
 function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
     silent = get(ioc, :silent, :true)
@@ -52,17 +52,20 @@ function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
     used_tracks_df = innerjoin(tracks_data, all_tracks_df, on = :trackid)
     artist_name = artist_get(artist_id)[1].name
     io = color_set(ioc, :yellow)
-    print(io, "\n", artist_name, " has $(length(all_track_ids)) tracks on Spotify. ")
+    print(io, "\n", artist_name)
+    printstyled(io, " has ", color =:light_black)
+    print(io, length(all_track_ids))
+    printstyled(io, " tracks on Spotify. ", color = :light_black)
     if nrow(used_tracks_df) > 0
         if nrow(used_tracks_df) == 1
-            println(io, " One track in your playlists: ")
+            printstyled(io, " One track in your playlists: ", color = :light_black)
         else
-            println(io, nrow(used_tracks_df), " tracks in your tracks data: ")
+            printstyled(io, " ", nrow(used_tracks_df), " tracks in your tracks data: ", color = :light_black)
         end
         for dfrw in eachrow(used_tracks_df)
             track_id = dfrw[:trackid]
             track_name = dfrw[:trackname]
-            print(io, "  ", track_name, " ")
+            print(io, "\n  ", track_name, " ")
             if get(ioc, :print_ids, false)
                 print(io, "  ")
                 show(io, MIME("text/plain"), track_id)
@@ -71,10 +74,10 @@ function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
             io_ = color_set(io, :blue)
             playlistrefs = filter(x-> ! ismissing(x), collect(dfrw[r"playlistref"]))
             if length(playlistrefs) > 0
-                for l in playlistrefs #dfrw[r"playlistref"]
+                for l in playlistrefs 
                     if ! ismissing(l)
                         print(io_, "\n    ")
-                        playlist_nodetails_print(io_, l)
+                        playlist_no_details_print(io_, l)
                     end
                 end
                 println(io_)

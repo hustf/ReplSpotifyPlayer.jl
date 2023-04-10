@@ -1,5 +1,5 @@
 """
-    metronome(bpm::Real=72, bpb::Int=4; bars = 5)
+    metronome(bpm::Real=72, bpb::Int=4; bars = 5, interruptchannel = Channel(1))
 
 Sometimes, Spotify's rhytm analysis feels wrong. Check it with the metronome!
 
@@ -26,12 +26,17 @@ valence          0.576
 julia> metronome(107.809, 3)
          1 2 3|10/10|
 ```
+
+# Advanced use
+
+The Repl mode runs this asyncronously, and can stop it before 
+it's finished by putting something on `stop_channel`.
 """
-function metronome(bpm::Real=72, bpb::Int=4; bars = 10)
+function metronome(bpm::Real=72, bpb::Int=4; bars = 10, stop_channel = Channel(1))
     pause = 60 / bpm
     counter = 0
     bar = 0
-    while bar < bars
+    while bar < bars && ! isready(stop_channel)
         counter += 1
         bar = Int(floor(counter / bpb))
         counter % bpb == 1 && print(repeat(' ', bar))
@@ -46,13 +51,16 @@ function metronome(bpm::Real=72, bpb::Int=4; bars = 10)
             end
         end
     end
+    # Cleanup
+    isready(stop_channel) && take!(interruptchannel)
+    nothing
 end
 
 
 """
     playtracks(v)
 
-An example of making a useful one-argument function for pipelining syntax. 
+An example of a one-argument function, useful for pipelining syntax like in the example:
 
 # Example 
 ```
@@ -63,4 +71,37 @@ julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :tr
 function playtracks(v)
     player_resume_playback(;uris = v)
     println(length(v))
+end
+
+
+"""
+    euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T <: Float64
+    --> Float64
+
+This could be called the coefficient of variation for multi-dimensional samples.
+
+`single_sample_values` is intended to be one of the multi-dimensional samples.
+"""
+function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T <: Float64
+    @assert length(sets) == length(single_sample_values)
+    param_distances = Float64[]
+    for (vec, x) in zip(sets, single_sample_values)
+        μ = mean(vec)
+        σ = std(vec, corrected = true)
+        Δ = x - μ
+        if σ == 0
+            @assert Δ == 0
+            push!(param_distances, 0.0)
+        else
+            Δ_per_σ = Δ / σ
+            push!(param_distances, Δ_per_σ)
+        end
+    end
+    sqrt(sum(param_distances.^2))
+end
+
+"euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64) -> Float64"
+function euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64)
+    single_sample_values = map(featuretype-> featuretype[sample_no], sets)
+    euclidean_normalized_sample_deviation(sets, single_sample_values)
 end

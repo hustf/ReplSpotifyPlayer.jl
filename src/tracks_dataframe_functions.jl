@@ -1,27 +1,42 @@
 """
-    tracks_data_get(;silent = true)
+    tracks_data_load_and_update(;silent = true)
 
-Loads tracks data frame from file and updates it. Called when loading the module.
+Loads tracks data frame from file and updates it. Called when loading the module. 
+Does not save to disk, maybe use `tracks_data_update()` instead?
 
 # Example
 ```julia-repl
-julia> TDF[] = tracks_data_get(; silent = false)
+julia> TDF[] = tracks_data_load_and_update(; silent = false)
 ```
 """
-function tracks_data_get(;silent = true)
+function tracks_data_load_and_update(;silent = true)
     tracks_data = load_tracks_data()
     playlistrefs_df = playlist_owned_dataframe_get(;silent)
-    #tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistrefs_df)
     sort!(playlistrefs_df)
     # This will append tracks, and also delete old versions.
     tracks_data_append!(tracks_data, playlistrefs_df; silent)
     tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df; silent)
-
     tracks_data_append_audio_features!(tracks_data; silent)
     tracks_data
 end
 
 
+"""
+     tracks_data_update(;forceupdate = false))
+
+Preferred way to access TDF[] and save an updated version.
+
+forceupdate = true => replace in-memory version.
+"""
+function tracks_data_update(;forceupdate = false)
+    if isempty(TDF[]) || forceupdate
+        TDF[] = tracks_data_load_and_update(;silent = false)
+        if ! isempty(TDF[])
+            save_tracks_data(TDF[])
+        end
+    end
+    TDF[]
+end
 """
     tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistref)
 
@@ -60,7 +75,7 @@ end
 In-place unsubscribed reference deletion. Reorders so as to place 'missings' in the last ref. columns.
 """
 function tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df::DataFrame; silent = true)
-    ! silent && println(stdout, "\nLooking for outdated playlist references.")
+    ! silent && println(stdout, "\nPruning outdated playlist references.")
     ids = playlistrefs_df.id
     refdata = tracks_data[!, r"playlistref"]
     for rn in 1:nrow(refdata)
