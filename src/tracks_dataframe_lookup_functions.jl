@@ -55,9 +55,11 @@ is_track_in_data(trackid) = is_track_in_data(tracks_data_update(), trackid)
     is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_data)-> Bool
 """
 function is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId)
+    # TODO: fix either function name or the number of arguments.
     is_track_in_track_data(t, playlist_id, tracks_data_update())
 end
 function is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_data)
+    # TODO: Not a good name or argument list!
     td = subset(tracks_data, :trackid => ByRow(x -> x == t))
     is_playlist_in_data(td, playlist_id)
 end

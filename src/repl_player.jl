@@ -323,6 +323,6 @@ function current_typicality_print(ioc)
     rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
     histograms_plot(ioc, rpd)
     abnormality_rank_print(ioc, rpd)
-    abnormality_playlist_ranked_print(ioc, playlist_data)
+    abnormality_playlist_ranked_print(ioc, playlist_data, playlist_ref)
 end
 

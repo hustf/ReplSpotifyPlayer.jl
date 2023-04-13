@@ -75,14 +75,16 @@ end
 
 
 """
-    euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T <: Float64
+    euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
     --> Float64
 
-This could be called the coefficient of variation for multi-dimensional samples.
+This method shows how well a multi-dimensional sample would fit in 'sets'. If the sample is 
+already part of the set, use the method below.
 
-`single_sample_values` is intended to be one of the multi-dimensional samples.
+Note that actually adding the sample to the set would change the mean and deviation. This method can be
+used to determine which sets a sample would fit best to.
 """
-function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T <: Float64
+function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
     @assert length(sets) == length(single_sample_values)
     param_distances = Float64[]
     for (vec, x) in zip(sets, single_sample_values)
@@ -100,8 +102,38 @@ function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_s
     sqrt(sum(param_distances.^2))
 end
 
-"euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64) -> Float64"
-function euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64)
+""""
+    euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64) 
+    -> Float64
+
+This could be called the coefficient of variation for multi-dimensional samples.
+
+# Example
+
+Here, 'sets' is two-dimensional. The mean μ = [2, 20].
+```
+julia> sets = [
+       [1, 2, 3],
+       [10, 20, 30]]
+2-element Vector{Vector{Int64}}:
+ [1, 2, 3]
+ [10, 20, 30]
+
+julia> euclidean_normalized_sample_deviation(sets, 2)
+0.0
+```
+
+The return value for sample no. 2 is zero because the sample is precisely the mean, \\
+deviation to mean is [0, 0].
+
+```
+julia> euclidean_normalized_sample_deviation(sets, 1)
+1.4142135623730951
+```
+
+The return value for sample no. 1 is √2 because norrmalized devation σₙ = [1, 1].
+"""
+function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, sample_no::Int64) where T
     single_sample_values = map(featuretype-> featuretype[sample_no], sets)
     euclidean_normalized_sample_deviation(sets, single_sample_values)
 end

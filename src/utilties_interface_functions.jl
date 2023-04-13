@@ -59,7 +59,7 @@ struct ReplPlotData
     track_values::Vector{Float64}
     series::Vector{String}
 end
-ReplPlotData(;playlist_name = "", track_name = "", height = 4) = ReplPlotData(playlist_name, track_name, height, String[], Vector{Vector{Float64}}(), Float64[], String[])
+ReplPlotData(;playlist_name = "", track_name = "", height = 3) = ReplPlotData(playlist_name, track_name, height, String[], Vector{Vector{Float64}}(), Float64[], String[])
 
 """
    build_histogram_data(track_data, playlist_ref, playlist_data) -> ReplPlotData
@@ -87,6 +87,7 @@ end
 
 """
     build_histogram_data(track_name, track_plot_data, playlist_name::String, playlist_plot_data)
+    --> ReplPlotData
 
 Assign dataframe data to ad-hoc structure
 """
@@ -106,7 +107,7 @@ end
 
 
 """
-   histograms_plot(ioc, rpd::ReplPlotData) -> Bool
+   histograms_plot(ioc, rpd::ReplPlotData)
 
 Plots several histograms with highlighted samplas and a common title
 """
@@ -152,7 +153,7 @@ function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, t
         @assert Δ == 0
         Δ_per_σ = 0
     else
-        Δ_per_σ = round((Δ - μ) / σ; digits = 2)
+        Δ_per_σ = round(Δ / σ; digits = 2)
     end
     tracktext = "$text = μ"
     if Δ_per_σ  < 0
@@ -164,8 +165,17 @@ function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, t
     push!(p.labels_right, 2 => lpad("μ = $(round(μ, digits = 2))", length(tracktext)))
     push!(p.labels_right, 3 => lpad("σ = $(round(σ, digits = 2))", length(tracktext)))
     println(ioc, p)
+    true
 end
 
+
+"""
+    abnormality_rank_print(ioc, rpd)
+
+Print the current track's "abnormality" and
+how it ranks compared to the other tracks in the 
+playlist.
+"""
 function abnormality_rank_print(ioc, rpd)
     alldata = rpd.data_for_bins
     abnormality = euclidean_normalized_sample_deviation(alldata, rpd.track_values)
@@ -183,8 +193,6 @@ function abnormality_rank_print(ioc, rpd)
     # Compare with the other tracks
     abnormalities = Float64[]
     for track_index in 1:length(first(alldata))
-#        track_values = map(featuretype-> featuretype[track_index], alldata)
-#        @assert length(track_values) == length(alldata)
         abnorm = euclidean_normalized_sample_deviation(alldata, track_index)
         push!(abnormalities, abnorm)
     end
@@ -200,13 +208,15 @@ function abnormality_rank_print(ioc, rpd)
     color_set(io)
     println(" ranked from most to least typical.")
     color_set(ioc)
+    true
 end
 
 
 """
     ordinal_string(place_in_set)
+    --> String
 
-Returns English description of {1. , 2., ... ,21. }
+Returns English description of {1. , 2., ... ,21. } place number in a set.
 """
 function ordinal_string(ordinal, setsize)
     isnan(ordinal) && return "$ordinal."
@@ -220,8 +230,6 @@ function ordinal_string(ordinal, setsize)
         "third"
     elseif ordinal == 4
         "fourth"
-    elseif ordinal == setsize - 1
-        "second last"
     elseif ordinal == setsize 
         "last"
     elseif ld == 1 && ordinal > 20
@@ -235,7 +243,25 @@ function ordinal_string(ordinal, setsize)
     end
 end
 
-function abnormality_playlist_ranked_print(ioc, playlist_tracks_data)
+"""
+    abnormality_playlist_ranked_print(ioc, playlist_tracks_data)
+    --> true
+    
+Calculate "abnormality" for all tracks. Sort by rising
+"abnormality", i.e. decreasing "typicality" for the playlist.
+
+Print the list, the most typical track at the top.
+Offer to pick a track to resume playing from.
+
+TODO: Continue reducing number of arguments in calls.
+User should be given the oportunity 
+ to sort on interesting criteria (in a while loop)
+Also, some playlists are > 99 tracks. Maybe not 
+picking from such large lists is OK.
+
+ For example, 'danceability', 'popularity' (if that still exists.)
+"""
+function abnormality_playlist_ranked_print(ioc, playlist_tracks_data, playlist_ref)
     tr_af = select_cols_with_relevant_audio_features(playlist_tracks_data)
     names = String[]
     trackids = SpTrackId[]
@@ -254,17 +280,91 @@ function abnormality_playlist_ranked_print(ioc, playlist_tracks_data)
     for i in 1:nrow(tr_af)
         push!(abnormalities, euclidean_normalized_sample_deviation(audiodata, i))
     end
+    sort_playlist_by_values_and_print(ioc, trackids, names, abnormalities, playlist_tracks_data, playlist_ref)
+end
+function sort_playlist_by_values_and_print(ioc, trackids, names, values, playlist_tracks_data, playlist_ref)
     # Sort playlist by abnormality
-    perm = sortperm(abnormalities)
+    perm = sortperm(values)
     names = names[perm]
     trackids = trackids[perm]
-    abnormalities = abnormalities[perm]
-    for i in 1:nrow(tr_af)
+    values = values[perm]
+    n = length(trackids)
+    for i in 1:n
         print(ioc, lpad(names[i], 81))
         print(ioc, "  ")
-        print(ioc, lpad(round(abnormalities[i]; digits = 3), 5))
-        println(ioc, lpad(ordinal_string(i, nrow(tr_af)), 12))
+        print(ioc, lpad(round(values[i]; digits = 3), 5))
+        println(ioc, lpad(ordinal_string(i, n), 12))
     end
-    println(ioc)
+    select_trackno_and_play_print(ioc, perm, playlist_tracks_data, playlist_ref)
+end
+function select_trackno_and_play_print(ioc, perm, playlist_tracks_data, playlist_ref)
+    track_id, track_name = pick_a_track_or_nothing_to_play_from_list(ioc, playlist_tracks_data, perm)
+    color_set(ioc)
+    isnothing(track_id) && return true
+    io = color_set(ioc, :light_black)
+    print(io, "You picked: ")
+    color_set(ioc)
+    print(ioc, "  ", track_name)
+    if get(ioc, :print_ids, false)
+        print(ioc, "  ")
+        show(ioc, MIME("text/plain"), track_id)
+        color_set(ioc)
+    end
+    color_set(io)
+    print(io, " from ")
+    io_ = color_set(ioc, :blue)
+    playlist_no_details_print(io_, playlist_ref)
+    println(io_)
+    color_set(ioc)
+    context_uri = playlist_ref.id
+    offset = Dict("uri" => track_id)
+    player_resume_playback(;context_uri, offset)
+    # Avoid having the previous track shown in status line...
+    sleep(1)
+    true
+end
+
+function pick_a_track_or_nothing_to_play_from_list(ioc, playlist_tracks_data, perm)
+    io = color_set(ioc, :176)
+    track_ids = playlist_tracks_data[!, :trackid][perm]
+    track_names = playlist_tracks_data[!, :trackname][perm]
+    n = length(track_ids)
+    print(io, "Type track number ∈ [1, ... $n] to play and press enter! Press enter to do nothing: ")
+    inpno = read_number_from_keyboard(1:n)
+    println(io)
+    color_set(ioc)
+    isnothing(inpno) && return nothing, nothing
+    track_ids[inpno], track_names[inpno]
+end
+
+"""
+    read_number_from_keyboard(minval, maxval)
+    --> Union{Nothing, Int64}
+
+We can't use readline(stdin) while in our special replmode - that would block.
+
+If this is called from the normal REPL mode, it will be necessary
+to press enter after the number. Only the characters necessary for
+a number in `rng` will be read, and the remaining characters in buffer
+are processed by REPL as usual.
+"""
+function read_number_from_keyboard(rng)
+    count = length(string(maximum(rng)))
+    @show count
+    buf = ""
+    while count > minimum(rng) - 1
+        count -= 1
+        @show count
+        c = Char(first(read(stdin, 1)))
+        print(stdout, c)
+        c < '0' && break
+        c > '9' && break
+        buf *= c
+    end
+    @show "exit" buf
+    inpno = tryparse(Int64, buf)
+    isnothing(inpno) && return nothing
+    inpno ∉ rng && return nothing
+    inpno
 end
 

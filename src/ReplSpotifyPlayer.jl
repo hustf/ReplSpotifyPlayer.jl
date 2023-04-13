@@ -15,7 +15,7 @@ using UnicodePlots
 import DataFrames.PrettyTables
 import DataFrames.PrettyTables: _render_text
 using Spotify
-using Spotify: SpType, get_user_country
+using Spotify: SpType, get_user_country, credentials_contain_scope
 using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists, Spotify.Albums, Spotify.Search
 using Statistics
 

@@ -75,24 +75,28 @@ end
 In-place unsubscribed reference deletion. Reorders so as to place 'missings' in the last ref. columns.
 """
 function tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df::DataFrame; silent = true)
-    ! silent && println(stdout, "\nPruning outdated playlist references.")
-    ids = playlistrefs_df.id
-    refdata = tracks_data[!, r"playlistref"]
-    for rn in 1:nrow(refdata)
-        for cn in 1:ncol(refdata)
-            plc = refdata[rn, cn] # 'unpack'
-            if ! ismissing(plc)
-                @assert plc isa PlaylistRef
-                if plc.id ∉ ids
-                    ! silent && print(stdout, "Remove ref. to \"", plc.name, "\"    ")
-                    refdata[rn, cn] = missing
+    if credentials_contain_scope("playlist-read-private")
+        ! silent && println(stdout, "\nPruning outdated playlist references.")
+        ids = playlistrefs_df.id
+        refdata = tracks_data[!, r"playlistref"]
+        for rn in 1:nrow(refdata)
+            for cn in 1:ncol(refdata)
+                plc = refdata[rn, cn] # 'unpack'
+                if ! ismissing(plc)
+                    @assert plc isa PlaylistRef
+                    if plc.id ∉ ids
+                        ! silent && print(stdout, "Remove ref. to \"", plc.name, "\"    ")
+                        refdata[rn, cn] = missing
+                    end
                 end
             end
+            # In-place value sort - all cols are of same type.
+            tracks_data[rn, :] = sort_columns_missing_last(tracks_data[rn, :])
         end
-        # In-place value sort - all cols are of same type.
-        tracks_data[rn, :] = sort_columns_missing_last(tracks_data[rn, :])
+        ! silent && println(stdout)
+    else
+        ! silent && println(stdout, "\nSkipping pruning playlists, since current grants do not allow to update playlist subscriptions.")
     end
-    ! silent && println(stdout)
 end
 
 

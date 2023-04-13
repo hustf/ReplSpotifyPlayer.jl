@@ -112,10 +112,10 @@ end
 - include_groups : A comma-separated list of keywords that will be used to filter the response.
     If not supplied, all album types will be returned.
     Valid values are:
-    * `album`
-    * `single`
-    * `compilation`
-    * `appears_on`
+    * `album` (default)
+    * `single` (default)
+    * `compilation` (default)
+    * `appears_on` (not default)
 
 # Example
 
@@ -135,13 +135,41 @@ julia> artist_get_all_albums(artist_id)
  spotify:album:0Dg03V02HduzUmPSOPugW1
  spotify:album:5W3fyI4YPle5wruoB9mBOX
 ```
+
+# Examples, default arguments
+
+Here, we press 'l' while the player context is Madonna's most popular tunes:
+
+```
+Material Girl \\ Celebration (double disc version) \\ Madonna  spotify:track:22sLuJYcvZOSoLLRYev1s5\\
+◍ >l  Madonna  followers: 6867714  genres: ["dance pop", "pop"]  spotify:artist:6tbjWDEIzxoDsBA1FuhfPW\\
+Madonna has 1131 tracks on Spotify. None occur in your playlists.\\
+```
+
+
+- I like many Madonna tracks, but now feel confident that none appears in my playlist.
+
+
+## Checking with a wider scope:
+
+By dropping `include_groups`, we get 'appears on' results as well:
+
+```
+julia> artist_get_all_albums("spotify:artist:6tbjWDEIzxoDsBA1FuhfPW", include_groups = "")
+247-element Vector{SpAlbumId}:
+spotify:album:44e7fW0OfNaIyUzIg6mat3
+...
+spotify:album:5QQ66C39N9ysUf1vr0rIzs
+```
+
+The latter scope is too wide a net, when the context is finding tracks from this artist in our playllists.
 """
-function artist_get_all_albums(artist_id; country = get_user_country(), include_groups = "")
+function artist_get_all_albums(artist_id; country = get_user_country(), include_groups = ["album", "single", "compilation"])
     batchsize = 50
     albums = Vector{SpAlbumId}()
     for batchno = 0:200
         offset = batchno * batchsize
-        json, waitsec = artist_get_albums(artist_id; limit = batchsize, offset, country)
+        json, waitsec = artist_get_albums(artist_id; limit = batchsize, offset, country, include_groups)
         isempty(json) && break
         waitsec > 0 && throw("Too fast, whoa!")
         l = length(json.items)

@@ -1,6 +1,5 @@
 # This file wraps functions from Spotify.jl.
-# Used by tracks_dataframe_functions.jl, and
-# 'is_track_in_playlist' by repl_player.jl.
+# Used by tracks_dataframe_functions.jl
 # Some of these wrappers translate into ReplSpotifyPlayer types and DataFrame.
 
 # Some are based on Spotify.jl/example/
@@ -171,7 +170,8 @@ function is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
             sleep(waitsec)
         end
         o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; offset = length(track_ids), fields, limit=100);
-        track_ids = o.items .|> i -> i.track.id |> SpTrackId
+        new_track_ids = o.items .|> i -> i.track.id |> SpTrackId
+        append!(track_ids, new_track_ids)
         t in track_ids && return true
     end
     false
