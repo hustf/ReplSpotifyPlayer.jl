@@ -244,7 +244,7 @@ function ordinal_string(ordinal, setsize)
 end
 
 """
-    abnormality_playlist_ranked_print(ioc, playlist_tracks_data)
+    playlist_ranked_print_play(rank_func::Function, ioc, playlist_tracks_data, playlist_ref)
     --> true
     
 Calculate "abnormality" for all tracks. Sort by rising
@@ -261,17 +261,29 @@ picking from such large lists is OK.
 
  For example, 'danceability', 'popularity' (if that still exists.)
 """
-function abnormality_playlist_ranked_print(ioc, playlist_tracks_data, playlist_ref)
+function playlist_ranked_print_play(rank_func::Function, ioc, playlist_tracks_data, playlist_ref)
+    track_ids = playlist_tracks_data[!,:trackid]
+    track_names = playlist_tracks_data[!,:trackname]
+    abnormalities = rank_func(playlist_tracks_data)
+    playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
+    print(color_set(ioc, :light_black), " sorted increasing by ")
+    color_set(ioc, :white)
+    print(color_set(ioc, :white), rank_func)
+    color_set(ioc)
+    println(ioc, ":")
+    sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_values_and_print(ioc, track_ids, track_names, abnormalities)
+    select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_names)
+end
+
+function abnormality(playlist_tracks_data::DataFrame)
     tr_af = select_cols_with_relevant_audio_features(playlist_tracks_data)
-    names = String[]
-    trackids = SpTrackId[]
+    # Rearrange from dataframe to nested vector - one vector 
+    # contains a feature per track.
     audiodata = Vector{Vector{Float64}}()
     for j in 1:ncol(tr_af)
         push!(audiodata, Float64[])
     end
     for i in 1:nrow(tr_af)
-        push!(names, playlist_tracks_data[i, :trackname])
-        push!(trackids, playlist_tracks_data[i, :trackid])
         for j in 1:ncol(tr_af)
             push!(audiodata[j], tr_af[i, j])
         end
@@ -280,27 +292,30 @@ function abnormality_playlist_ranked_print(ioc, playlist_tracks_data, playlist_r
     for i in 1:nrow(tr_af)
         push!(abnormalities, euclidean_normalized_sample_deviation(audiodata, i))
     end
-    sort_playlist_by_values_and_print(ioc, trackids, names, abnormalities, playlist_tracks_data, playlist_ref)
+    abnormalities
 end
-function sort_playlist_by_values_and_print(ioc, trackids, names, values, playlist_tracks_data, playlist_ref)
+function sort_playlist_by_values_and_print(ioc, track_ids, track_names, values)
+    @assert length(track_ids) == length(track_names) == length(values)
+    n = length(track_ids)
     # Sort playlist by abnormality
     perm = sortperm(values)
-    names = names[perm]
-    trackids = trackids[perm]
-    values = values[perm]
-    n = length(trackids)
+    sorted_track_ids = track_ids[perm]
+    sorted_track_names = track_names[perm]
+    sorted_values = values[perm]
     for i in 1:n
-        print(ioc, lpad(names[i], 81))
+        print(ioc, lpad(sorted_track_names[i], 81))
         print(ioc, "  ")
         print(ioc, lpad(round(values[i]; digits = 3), 5))
         println(ioc, lpad(ordinal_string(i, n), 12))
     end
-    select_trackno_and_play_print(ioc, perm, playlist_tracks_data, playlist_ref)
+    return sorted_track_ids, sorted_track_names, sorted_values
 end
-function select_trackno_and_play_print(ioc, perm, playlist_tracks_data, playlist_ref)
-    track_id, track_name = pick_a_track_or_nothing_to_play_from_list(ioc, playlist_tracks_data, perm)
+function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_track_names)
+    inpno = pick_a_track_or_nothing_to_play_from_list(ioc, 1:length(sorted_track_ids))
+    isnothing(inpno) && return nothing
+    track_id = sorted_track_ids[inpno]
+    track_name = sorted_track_names[inpno]
     color_set(ioc)
-    isnothing(track_id) && return true
     io = color_set(ioc, :light_black)
     print(io, "You picked: ")
     color_set(ioc)
@@ -312,10 +327,8 @@ function select_trackno_and_play_print(ioc, perm, playlist_tracks_data, playlist
     end
     color_set(io)
     print(io, " from ")
-    io_ = color_set(ioc, :blue)
-    playlist_no_details_print(io_, playlist_ref)
-    println(io_)
-    color_set(ioc)
+    playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
+    println(io)
     context_uri = playlist_ref.id
     offset = Dict("uri" => track_id)
     player_resume_playback(;context_uri, offset)
@@ -324,17 +337,14 @@ function select_trackno_and_play_print(ioc, perm, playlist_tracks_data, playlist
     true
 end
 
-function pick_a_track_or_nothing_to_play_from_list(ioc, playlist_tracks_data, perm)
+function pick_a_track_or_nothing_to_play_from_list(ioc, rng)
     io = color_set(ioc, :176)
-    track_ids = playlist_tracks_data[!, :trackid][perm]
-    track_names = playlist_tracks_data[!, :trackname][perm]
-    n = length(track_ids)
-    print(io, "Type track number ∈ [1, ... $n] to play and press enter! Press enter to do nothing: ")
-    inpno = read_number_from_keyboard(1:n)
+    print(io, "Type track number ∈ $rng to play and press enter! Press enter to do nothing: ")
+    inpno = read_number_from_keyboard(rng)
     println(io)
     color_set(ioc)
-    isnothing(inpno) && return nothing, nothing
-    track_ids[inpno], track_names[inpno]
+    isnothing(inpno) && return nothing
+    inpno
 end
 
 """
@@ -350,18 +360,15 @@ are processed by REPL as usual.
 """
 function read_number_from_keyboard(rng)
     count = length(string(maximum(rng)))
-    @show count
     buf = ""
     while count > minimum(rng) - 1
         count -= 1
-        @show count
         c = Char(first(read(stdin, 1)))
         print(stdout, c)
         c < '0' && break
         c > '9' && break
         buf *= c
     end
-    @show "exit" buf
     inpno = tryparse(Int64, buf)
     isnothing(inpno) && return nothing
     inpno ∉ rng && return nothing

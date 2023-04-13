@@ -323,6 +323,12 @@ function current_typicality_print(ioc)
     rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
     histograms_plot(ioc, rpd)
     abnormality_rank_print(ioc, rpd)
-    abnormality_playlist_ranked_print(ioc, playlist_data, playlist_ref)
+    playlist_ranked_print_play(abnormality, ioc, playlist_data, playlist_ref)
 end
+
+# TODO: look at histograms_plot, abnormality_rank_print. Reuse funcs, delete specifics.
+# TODO: Reuse t, but add a menu:
+# typicality, and other funcs like danceability.
+# Reuse current_typicality print.
+
 
