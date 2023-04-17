@@ -12,7 +12,8 @@
 # Shortcuts are defined in keymap_dict, but
 # what it then does is specificed in `wrap_command`.
 
-# TODO: o for output the last track.
+# TODO: o for output the last result. Perhaps use 'write(stdin.buffer, 'appears on the prompt')'
+# where the "last result" is an updated global container. 
 # TODO: key for moving to an owned playlist, select from list and remember the last choice.
 
 function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
@@ -89,15 +90,19 @@ function act_on_keystroke(char)
         color_set(ioc)
     elseif c == 'm'
         io = color_set(ioc, :yellow)
-        current_artist_and_tracks_in_data_print(ioc)
+        current_artist_and_tracks_in_data_print(io)
         color_set(ioc)
     elseif c == 'r'
         io = color_set(ioc, :normal)
-        current_metronome_print(ioc)
+        current_metronome_print(io)
         color_set(ioc)
     elseif c == 't'
         io = color_set(ioc, :normal)
-        current_typicality_print(ioc)
+        current_typicality_print(io)
+        color_set(ioc)
+    elseif c == 'c'
+        io = color_set(ioc, :green)
+        warn_against_clones_print(io)
         color_set(ioc)
     end
     # After the command, a line with the current state:
@@ -116,8 +121,9 @@ function print_menu()
     n = text_colors[:normal]
     menu = """
        ¨e : exit.    ¨f(¨→) : forward.  ¨b(¨←) : back.  ¨p: pause, play.  ¨0-9:  seek.
-       ¨a : analysis.    ¨l : context.       ¨del(¨fn + ¨⌫  ) : delete from playlist.
-       ¨i : toggle ids.  ¨m : musician.  ¨r : rhythm.  ¨t : typicality.  ¨? : syntax.
+       ¨a : analysis.     ¨l : context.      ¨del(¨fn + ¨⌫  ) : delete from playlist.
+       ¨i : toggle ids.   ¨m : musician.     ¨r : rhythm.           ¨t : typicality. 
+       ¨c : cleanup clones.                                           ¨? : syntax.
     """
     menu = replace(menu, "¨" => b , ":" =>  "$n$l:", "." => ".$n", " or" => "$n$l or$n", "+" => "$n+", "(" => "$n(", ")" => "$n)")
     print(stdout, menu)
@@ -225,6 +231,7 @@ function define_single_keystrokes!(special_prompt)
         d['m'] = wrap_command
         d['r'] = wrap_command
         d['t'] = wrap_command
+        d['c'] = wrap_command
         d['0'] = wrap_command
         d['1'] = wrap_command
         d['2'] = wrap_command

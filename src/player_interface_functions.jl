@@ -3,8 +3,8 @@
 # They wrap hierarcical functionality in Spotify/player
 # They are based on Spotify.jl/example/
 """
-    get_player_state(ioc)
-    --> state object
+    get_player_state(ioc)\\
+    ---> state object
 Note: state contains the current track,
 but it takes up to a second to update after changes.
 

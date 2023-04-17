@@ -2,8 +2,8 @@
 # Used by repl_player.jl.
 
 """
-    artist_details_print(ioc, uri::String) -> nothing
-    artist_details_print(ioc, artist_id::SpArtistId) -> nothing
+    artist_details_print(ioc, uri::String) ---> nothing\\
+    artist_details_print(ioc, artist_id::SpArtistId) ---> nothing\\
 """
 function artist_details_print(ioc, uri::String)
     artist_id = SpArtistId(uri)
@@ -27,9 +27,9 @@ end
 
 
 """
-    artist_tracks_in_data_print(ioc, uri::String) -> nothing
-    artist_tracks_in_data_print(ioc, artist_id::SpArtistId) -> nothing
-    artist_tracks_in_data_print(ioc, artist_id, tracks_data) -> nothing
+    artist_tracks_in_data_print(ioc, uri::String) ---> nothing\\
+    artist_tracks_in_data_print(ioc, artist_id::SpArtistId) ---> nothing\\
+    artist_tracks_in_data_print(ioc, artist_id, tracks_data) ---> nothing\\
 
 This can be especially time consuming, so some progress indication when accessing
 the web API is probably in order.
@@ -104,8 +104,8 @@ end
 
 
 """
-    artist_get_all_albums(artist_id; country = get_user_country(), include_groups = "")
-    -> Vector{SpAlbumId},  prints to stdout
+    artist_get_all_albums(artist_id; country = get_user_country(), include_groups = "")\\
+    ---> Vector{SpAlbumId},  prints to stdout
 
 # Non-obious parameters
 
@@ -164,12 +164,13 @@ spotify:album:5QQ66C39N9ysUf1vr0rIzs
 
 The latter scope is too wide a net, when the context is finding tracks from this artist in our playllists.
 """
-function artist_get_all_albums(artist_id; country = get_user_country(), include_groups = ["album", "single", "compilation"])
+function artist_get_all_albums(artist_id; include_groups = ["album", "single", "compilation"])
     batchsize = 50
+    country = get_user_country()
     albums = Vector{SpAlbumId}()
     for batchno = 0:200
         offset = batchno * batchsize
-        json, waitsec = artist_get_albums(artist_id; limit = batchsize, offset, country, include_groups)
+        json, waitsec = artist_get_albums(artist_id; limit = batchsize, offset, country , include_groups)
         isempty(json) && break
         waitsec > 0 && throw("Too fast, whoa!")
         l = length(json.items)
@@ -187,8 +188,8 @@ end
 
 
 """
-    artist_get_all_tracks(artist_id; silent = true, country = get_user_country())
-    -> Vector{SpTrackId},  prints to stdout
+    artist_get_all_tracks(artist_id; silent = true, country = get_user_country())\\
+    ---> Vector{SpTrackId},  prints to stdout
 
 This gets all track_ids from the web API, whether that occurs in a user playlist or not.
 
@@ -237,9 +238,9 @@ julia> @time artist_get_all_tracks(artist_id)
 ```
 
 """
-function artist_get_all_tracks(artist_id; silent = true, country = get_user_country())
+function artist_get_all_tracks(artist_id; silent = true)
     tracks_w_duplicates = Vector{SpTrackId}()
-    album_ids = artist_get_all_albums(artist_id; country)
+    album_ids = artist_get_all_albums(artist_id)
     ! silent && println(stdout, "Retrieving tracks in albums:  ")
     for album_id in album_ids
         json, waitsec = album_get_single(album_id; market = country)

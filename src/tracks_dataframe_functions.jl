@@ -16,6 +16,7 @@ function tracks_data_load_and_update(;silent = true)
     # This will append tracks, and also delete old versions.
     tracks_data_append!(tracks_data, playlistrefs_df; silent)
     tracks_data_delete_unsubscribed_playlists!(tracks_data, playlistrefs_df; silent)
+    isempty(tracks_data) && return tracks_data
     tracks_data_append_audio_features!(tracks_data; silent)
     tracks_data
 end
@@ -169,6 +170,7 @@ function tracks_data_append!(tracks_data::DataFrame, pl_ref::PlaylistRef, track_
         else
             r = findfirst(rid -> id == rid, view(tracks_data, :, :trackid))
             if is_playlist_snapshot_in_data(view(tracks_data, r, :), pl_ref)
+                # TODO: Check why false positives here. At least from a blank start.
                 ! silent && println(stdout, "Duplicate track ", name, " in playlist ", pl_ref.name)
             else
                 admixture = DataFrame(;trackid = id, trackname = name, playlistref = pl_ref)
@@ -231,4 +233,159 @@ function sort_columns_missing_last(rw::DataFrameRow)
         rw[i] = newval
     end
     rw
+end
+
+
+
+function warn_against_clones_print(ioc, tracks_data::DataFrame)
+    suspects_data = tracks_with_clones_data(tracks_data)
+    # Get tracks objects inlculding potential 'linked_from' fields. 
+    suspected_objects = get_multiple_tracks(suspects_data[!, :trackid])
+    warn_against_relink_print(ioc, suspects_data, suspected_objects)
+    warn_against_different_context_print(ioc, suspects_data, suspected_objects, tracks_data)
+end
+
+# TODO look into My Guitar gently weeps. suspected_objects have identical uris. (u, v) = (462, 461)
+# Couldn't we catch the discrepancy in warn_against_relink_print?????
+# TODO what's taking so much time in 'warn_against..' and is that necessary? We don't need to know the number of tracks. Print without details? We need playlist_id.
+
+function warn_against_different_context_print(ioc, suspects_data, suspected_objects, tracks_data)
+    # suspects_data and suspected_objects are sorted and of the same length
+    @assert length(suspected_objects) == nrow(suspects_data) 
+    n = nrow(suspects_data)
+    println(color_set(ioc, :light_black), "\nAssessing $n clone pairs with respect to authentic origin \n(an album is more genuine than a generic collection)\n")
+    # index u, for the 'current' object
+    for u in 1:n
+        # look for v above and below u.
+        v = u - 1
+        if v < 1 || suspects_data[u, :trackname] !== suspects_data[v, :trackname]
+            v = u + 1
+            if v > n || suspects_data[u, :trackname] !== suspects_data[v, :trackname]
+                continue # Neither above nor below is a clone with current. Which is unexpected.
+            end
+        end
+        ou = suspected_objects[u]
+        ov = suspected_objects[v]
+        if prefer_adjacent_over_current(ou, ov)
+            #@show u, v
+            io = IOContext(color_set(ioc, :green))
+            track_album_artists_print(io, ou)
+            print(color_set(io, :light_black), "\n which is on a ")
+            color_set(io)
+            print(io, ou.album.album_type)
+            print(color_set(io, :light_black), " and is referred in ")
+            track_id_u = SpTrackId(ou.uri)
+            plrefs_u = playlistrefs_containing_track(track_id_u, tracks_data)
+            for plref in plrefs_u
+                length(plrefs_u) > 1 && print(ioc, "\n  ")
+                playlist_no_details_print(color_set(io, :blue), plref)         
+                print("  ")
+            end
+            color_set(ioc)
+            println(color_set(ioc, :light_black), "\n  ...we suggest to change to the identical track ")
+            # TODO we lost ioc keys...
+            track_album_artists_print(color_set(ioc, :green), ov) 
+            print(color_set(ioc, :light_black), "\n which is on an ")
+            color_set(ioc)
+            print(color_set(ioc, :green), ov.album.album_type)
+            print(color_set(ioc, :light_black), " and is referred in ")
+            track_id_v = SpTrackId(ov.uri)
+            plrefs_v = playlistrefs_containing_track(track_id_v, tracks_data)
+            for plref in plrefs_v
+                length(plrefs_v) > 1 && print(ioc, "\n  ")
+                playlist_no_details_print(color_set(ioc, :blue), plref)         
+                print("  ")
+            end
+            ioc = color_set(ioc, :normal)
+            println(ioc, "\nWhat does you say? (y: yes, Y: yes to all, n: no, N: no to all)")
+            println(ioc)
+        else
+            # Knowing the adjacent clone, we prefer to keep the current.
+        end
+    end # for
+end
+
+"prefer_adjacent_over_current(o_cur, o_adj) ---> Bool"
+function prefer_adjacent_over_current(o_cur, o_adj)
+    # CONSIDER Note, this does not yet cover the case:
+    # An album has been re-released, but is essentially the same.
+    # An example is "Made In Medina": spotify:album:3hBjCRF8nbh374xqB66Ojl and spotify:album:5umeFXcIuIdkNJc0fpvIwt
+    # Not having a good solution, we do nothing so far (return false). But other checks could be added 
+    # when the first return false.
+    criteria = Set([
+        ("single", "album"),
+        ("compilation", "album"),
+        ("compilation", "single"),
+        ("appears_on", "album"),
+        ("appears_on", "single"),
+        ("appears_on", "compilation")])
+    (o_cur.album.album_type, o_adj.album.album_type) ∈ criteria
+end
+
+"""
+    warn_against_relink_print(ioc, suspects_data, suspected_objects)
+
+This prints some non-interesting lines. Perhaps add a silent keyword, or drop it all.
+"""
+function warn_against_relink_print(ioc, suspects_data, suspected_objects)
+    println(color_set(ioc, :light_black), "Checking $(length(suspected_objects)) clone tracks for relinking and unavailability.")
+    for (track_object, track_row) in zip(suspected_objects, eachrow(suspects_data))
+        linkedfrom = get(track_object, :linked_from, nothing)
+        if ! isnothing(linkedfrom)
+            from_track_id = SpTrackId(linkedfrom.uri)
+            if from_track_id == track_row[:trackid]
+                track_id_o = SpTrackId(track_object.uri)
+                if from_track_id !== track_id_o
+                    printstyled(stdout, track_row[:trackname], color = :green)
+                    printstyled(stdout, " with track object id  ")
+                    print(stdout, track_id_o)
+                    printstyled(stdout, " was relinked from tracks data entry ", color = :yellow)
+                    print(stdout, from_track_id)
+                else
+                    throw("unexpected.")
+                end
+            else
+                printstyled(stdout, track_row[:trackname], " has a different linkedfrom field.", color = :yellow)
+                throw("Unexpected value. Decide what to do (replace trackid in playlist?).")
+            end
+        else
+            # printstyled(stdout, track_row[:trackname], " has no linkedfrom field. ", color = :176)
+            is_playable = get(track_object, :is_playable, nothing)
+            # printstyled(stdout, " .is_playable: ", is_playable, color = :light_black)
+            if ! is_playable
+                restrictions = get(track_object, :restrictions, nothing)
+                @assert ! isnothing(restrictions)
+                printstyled(stdout, track_row[:trackname], " has no linkedfrom field. ", color = :176)
+                printstyled(stdout, " .is_playable: ", is_playable, color = :light_black)
+                printstyled(stdout, " .restrictions.reason: ", restrictions.reason, color = :yellow)
+            end
+        end
+        #println(stdout)
+    end
+end 
+function tracks_with_clones_data(tracks_data)
+    df1 = select(tracks_data, :trackid, :trackname, :duration_ms)
+    # We know that trackid cells are unique. 
+    df2 = select(tracks_data, :trackname, :duration_ms)
+    # To compare two tracks, milliseconds is considered too accurate.
+    # Add a column for the less strict criterion.
+    df2.duration_s = Int.(round.(df2[!, :duration_ms] ./ 1000))
+    # Drop the old column
+    df2 = select(df2, :trackname, :duration_s)
+    # Capture df2 in function definition to make single-argument function.
+    function iscopy(row::DataFrameRow)
+        rowno = rownumber(row)
+        trackname = row[:trackname]
+        duration_s = row[:duration_s]
+        for rw in eachrow(df2)
+            rownumber(rw) == rowno && continue
+            duration_s == rw[:duration_s] && trackname == rw[:trackname] && return true
+        end
+        false
+    end
+    # Add a column showing a track was duplicated (or triplicated, quadruplicated, complicated)
+    df1.copy = map(iscopy, eachrow(df2))
+    # Filter to keep only trackids from rows that have copies.
+    df3 = filter(row -> row.copy, df1)
+    sort(select(df3, :trackid, :trackname, :duration_ms), :trackname)
 end

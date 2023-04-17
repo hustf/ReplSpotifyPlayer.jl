@@ -18,9 +18,13 @@ function track_album_artists_print(ioc, item::JSON3.Object)
     nothing
 end
 
+"track_in_playlists_print(ioc, track_id) ---> Bool"
+function track_in_playlists_print(ioc, track_id)
+    track_also_in_playlists_print(ioc, track_id, JSON3.Object())
+end
 
 """
-    track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object) -> Bool
+    track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object) ---> Bool
 """
 function track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object)
     if ! isempty(otherthan)
@@ -62,7 +66,7 @@ end
 ReplPlotData(;playlist_name = "", track_name = "", height = 3) = ReplPlotData(playlist_name, track_name, height, String[], Vector{Vector{Float64}}(), Float64[], String[])
 
 """
-   build_histogram_data(track_data, playlist_ref, playlist_data) -> ReplPlotData
+   build_histogram_data(track_data, playlist_ref, playlist_data) ---> ReplPlotData
 
 Extract and assign the data to a plottable structure.
 """
@@ -75,7 +79,7 @@ end
 
 """
     select_cols_with_relevant_audio_features(df) 
-    --> DataFrame
+    ---> DataFrame
 
 Extract the dataframe columns we need for typicality analysis
 """
@@ -87,7 +91,7 @@ end
 
 """
     build_histogram_data(track_name, track_plot_data, playlist_name::String, playlist_plot_data)
-    --> ReplPlotData
+    ---> ReplPlotData
 
 Assign dataframe data to ad-hoc structure
 """
@@ -214,7 +218,7 @@ end
 
 """
     ordinal_string(place_in_set)
-    --> String
+    ---> String
 
 Returns English description of {1. , 2., ... ,21. } place number in a set.
 """
@@ -245,7 +249,7 @@ end
 
 """
     playlist_ranked_print_play(rank_func::Function, ioc, playlist_tracks_data, playlist_ref)
-    --> true
+    ---> true
     
 Calculate "abnormality" for all tracks. Sort by rising
 "abnormality", i.e. decreasing "typicality" for the playlist.
@@ -311,7 +315,7 @@ function sort_playlist_by_values_and_print(ioc, track_ids, track_names, values)
     return sorted_track_ids, sorted_track_names, sorted_values
 end
 function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_track_names)
-    inpno = pick_a_track_or_nothing_to_play_from_list(ioc, 1:length(sorted_track_ids))
+    inpno = pick_number_in_range_and_print(ioc, 1:length(sorted_track_ids))
     isnothing(inpno) && return nothing
     track_id = sorted_track_ids[inpno]
     track_name = sorted_track_names[inpno]
@@ -337,19 +341,18 @@ function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sort
     true
 end
 
-function pick_a_track_or_nothing_to_play_from_list(ioc, rng)
+function pick_number_in_range_and_print(ioc, rng)
     io = color_set(ioc, :176)
-    print(io, "Type track number ∈ $rng to play and press enter! Press enter to do nothing: ")
+    print(io, "Type number ∈ $rng to play! Press enter to do nothing: ")
     inpno = read_number_from_keyboard(rng)
     println(io)
     color_set(ioc)
-    isnothing(inpno) && return nothing
     inpno
 end
 
 """
     read_number_from_keyboard(minval, maxval)
-    --> Union{Nothing, Int64}
+    ---> Union{Nothing, Int64}
 
 We can't use readline(stdin) while in our special replmode - that would block.
 
@@ -359,10 +362,10 @@ a number in `rng` will be read, and the remaining characters in buffer
 are processed by REPL as usual.
 """
 function read_number_from_keyboard(rng)
-    count = length(string(maximum(rng)))
+    remaining_digits = length(string(maximum(rng)))
     buf = ""
-    while count > minimum(rng) - 1
-        count -= 1
+    while remaining_digits >= minimum(rng)
+        remaining_digits -= 1
         c = Char(first(read(stdin, 1)))
         print(stdout, c)
         c < '0' && break

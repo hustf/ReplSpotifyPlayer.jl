@@ -1,8 +1,8 @@
 module ReplSpotifyPlayer
 # We'd like to
-# Lookup trackid -> playlist_ids
-# Lookup features -> track_ids
-# Lookup artists -> track_ids, playlist_ids
+# Lookup trackid ---> playlist_ids
+# Lookup features ---> track_ids
+# Lookup artists ---> track_ids, playlist_ids
 # Statistics for a playlist in terms of audio features and genres
 
 using REPL
@@ -53,6 +53,7 @@ include("player_interface_functions.jl")
 include("library_interface_functions.jl")
 include("artist_interface_functions.jl")
 include("album_interface_functions.jl")
+include("tracks_interface_functions.jl")
 include("utilties_interface_functions.jl")
 include("tracks_dataframe_functions.jl")
 include("tracks_dataframe_lookup_functions.jl")

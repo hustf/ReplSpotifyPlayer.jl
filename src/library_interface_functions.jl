@@ -5,10 +5,10 @@
 # They are based on Spotify.jl/example/
 
 
-"is_track_in_library(track_id::SpTrackId) -> Bool"
+"is_track_in_library(track_id::SpTrackId) ---> Bool"
 is_track_in_library(track_id::SpTrackId) = Spotify.Tracks.tracks_get_contains([track_id])[1][1]
 
-"delete_track_from_library_print(track_id, , item::JSON3.Object) -> Bool"
+"delete_track_from_library_print(track_id, , item::JSON3.Object) ---> Bool"
 function delete_track_from_library_print(ioc, track_id, item::JSON3.Object)
     if is_track_in_library(track_id)
         io = color_set(ioc, :yellow)

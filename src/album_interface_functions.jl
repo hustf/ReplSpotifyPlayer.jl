@@ -2,13 +2,14 @@
 # Used by repl_player.jl.
 
 """
-album_details_print(ioc, uri) -> nothing
-album_details_print(ioc, album_id::SpAlbumId) -> nothing
-album_details_print(ioc, album_id::SpAlbumId, o::JSON3.Object) -> nothing
+album_details_print(ioc, uri) ---> nothing\\
+album_details_print(ioc, album_id::SpAlbumId) ---> nothing\\
+album_details_print(ioc, album_id::SpAlbumId, o::JSON3.Object) ---> nothing\\
 """
 album_details_print(ioc, uri::String) = album_details_print(ioc, SpAlbumId(uri))
 function album_details_print(ioc, album_id::SpAlbumId)
-    album = album_get_single(album_id)[1]
+    market = get_user_country()
+    album = album_get_single(album_id; market)[1]
     album_details_print(ioc, album_id, album)
 end
 

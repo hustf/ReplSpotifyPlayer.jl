@@ -65,8 +65,8 @@ function is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_
 end
 
 """
-    playlistrefs_containing_track(t::SpTrackId) -> Vector{PlaylistRef}
-    playlistrefs_containing_track(t::SpTrackId, tracks_data) -> Vector{PlaylistRef}
+    playlistrefs_containing_track(t::SpTrackId) ---> Vector{PlaylistRef}
+    playlistrefs_containing_track(t::SpTrackId, tracks_data) ---> Vector{PlaylistRef}
 """
 function playlistrefs_containing_track(t::SpTrackId)
     playlistrefs_containing_track(t, tracks_data_update())
@@ -96,7 +96,7 @@ end
 
 """
     playlist_get_latest_ref_and_data(context::JSON3.Object)
-    -> (::PlaylistRef, ::DataFrame)
+    ---> (::PlaylistRef, ::DataFrame)
 """
 function playlist_get_latest_ref_and_data(context::JSON3.Object)
     playlist_id = SpPlaylistId(context.uri)
@@ -114,7 +114,7 @@ end
 
 """
     playlist_get_audio_data(playlist_ref)
-    -> ::DataFrame
+    ---> ::DataFrame
 """
 function playlist_get_stored_audio_data(playlist_ref)
     tracks_data = tracks_data_update()

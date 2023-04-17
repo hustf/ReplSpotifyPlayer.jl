@@ -29,7 +29,7 @@ playlist_owned_dataframe_get(; silent = true) = DataFrame(playlist_owned_refs_ge
 
 """
     track_ids_and_names_in_playlist(playlist_id::SpPlaylistId)
-        -> (Vector{SpTrackId}, Vector{String})
+        ---> (Vector{SpTrackId}, Vector{String})\\
 
 Currently, Spotify's player shows tracks which have become unavalable as grey. This function
 will exclude most of the 'grey' ones, but not all.
@@ -53,14 +53,15 @@ julia> track_ids_names = hcat(track_ids_and_names_in_playlist(playlist_id)...)
 """
 function track_ids_and_names_in_playlist(playlist_id::SpPlaylistId)
     fields = "items(track(name,id,is_playable)), next"
-    o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100);
+    market = get_user_country()
+    o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100, market);
     track_ids = [SpTrackId(it.track.id) for it in o.items if is_item_track_playable(it)]
     track_names = [string(it.track.name) for it in o.items if is_item_track_playable(it)]
     while o.next !== nothing
         if waitsec > 0
             sleep(waitsec)
         end
-        o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; offset = length(track_ids), fields, limit=100);
+        o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; offset = length(track_ids), fields, limit=100, market);
         append!(track_ids, [SpTrackId(it.track.id) for it in o.items if is_item_track_playable(it)])
         append!(track_names, [string(it.track.name) for it in o.items if is_item_track_playable(it)])
     end
@@ -87,7 +88,7 @@ function insert_audio_feature_vals!(trackrefs_rw)
 end
 
 
-"playlist_details_print(context::JSON3.Object) -> nothing"
+"playlist_details_print(context::JSON3.Object) ---> nothing"
 function playlist_details_print(ioc, context::JSON3.Object)
     if context.type !== "playlist"
         if context.type == "collection"
@@ -109,7 +110,7 @@ end
 
 
 
-"delete_track_from_playlist_print(track_id, item::JSON3.Object) -> Bool"
+"delete_track_from_playlist_print(track_id, item::JSON3.Object) ---> Bool"
 function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON3.Object)
     if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
         print(ioc, "\n  ❌ Can't delete \"")
@@ -119,7 +120,8 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
         println(ioc)
         return false
     end
-    playlist_details = Spotify.Playlists.playlist_get(playlist_id)[1]
+    market = get_user_country()
+    playlist_details = Spotify.Playlists.playlist_get(playlist_id; market)[1]
     if isempty(playlist_details)
         print(ioc, "\n  ❌ Delete: Can't get playlist details from ")
         playlist_details_print(ioc, playlist_id)
@@ -157,19 +159,20 @@ end
 
 """
     is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
-        -> Bool
+        ---> Bool
     
 """
 function is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
     fields = "items(track(name,id)), next"
-    o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100);
+    market = get_user_country()
+    o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100, market);
     track_ids = o.items .|> i -> i.track.id |> SpTrackId
     t in track_ids && return true
     while o.next !== nothing
         if waitsec > 0
             sleep(waitsec)
         end
-        o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; offset = length(track_ids), fields, limit=100);
+        o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; offset = length(track_ids), fields, limit=100, market);
         new_track_ids = o.items .|> i -> i.track.id |> SpTrackId
         append!(track_ids, new_track_ids)
         t in track_ids && return true
@@ -177,13 +180,10 @@ function is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
     false
 end
 
-########################
-# Internal to this file:
-########################
 
 """
     playlist_owned_refs_get(;silent = true)
-    -> Vector{PlaylistRef}, prints to stdout
+    ---> Vector{PlaylistRef}, prints to stdout
 
 Storing PlaylistRefs instead of SpPlaylistId enables us to
 identify when playlist contents have been updated. There's
@@ -219,7 +219,7 @@ end
 
 """
     is_item_track_playable(it::JSON3.Object)
-        -> Bool
+        ---> Bool
 
 Makes no web API calls.
 
@@ -243,20 +243,14 @@ end
 
 wanted_feature_keys() = [:danceability, :key, :valence, :speechiness, :duration_ms, :instrumentalness, :liveness, :mode, :acousticness, :time_signature, :energy, :tempo, :loudness]
 wanted_feature_pair(p) = p[1] ∈ wanted_feature_keys()
-function get_audio_features_dic(trackid)
-    jsono, waitsec = tracks_get_audio_features(trackid)
-    if waitsec > 0
-        @info waitsec
-        sleep(waitsec)
-    end
-    filter(wanted_feature_pair, jsono)
-end
+
 
 
 
 "playlist_details_print(playlist_id::SpPlaylistId)"
 function playlist_details_print(ioc, playlist_id::SpPlaylistId)
-    pld = Spotify.Playlists.playlist_get(playlist_id)[1]
+    market = get_user_country()
+    pld = Spotify.Playlists.playlist_get(playlist_id; market)[1]
     if isempty(pld)
         println(ioc, "Can't get playlist details.")
     end

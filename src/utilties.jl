@@ -76,7 +76,7 @@ end
 
 """
     euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
-    --> Float64
+    ---> Float64
 
 This method shows how well a multi-dimensional sample would fit in 'sets'. If the sample is 
 already part of the set, use the method below.
@@ -104,7 +104,7 @@ end
 
 """"
     euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64) 
-    -> Float64
+    ---> Float64
 
 This could be called the coefficient of variation for multi-dimensional samples.
 

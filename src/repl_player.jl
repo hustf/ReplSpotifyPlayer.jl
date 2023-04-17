@@ -2,7 +2,7 @@
 # They do something, then returns a string with feedback.
 
 """
-    current_playing_print() -> Bool
+    current_playing_print() ---> Bool
 
 Please wait 1 second after changes for correct info.
 """
@@ -21,7 +21,7 @@ function current_playing_print(ioc)
     true
 end
 """
-    current_context_print(ioc) -> Bool
+    current_context_print(ioc) ---> Bool
 
 Shows the playlist name or Library. Also where else the current track appears.
 
@@ -92,7 +92,7 @@ end
 
 
 """
-    delete_current_playing_from_owned_print(ioc) -> Bool
+    delete_current_playing_from_owned_print(ioc) ---> Bool
 
 Delete track from playlist or library context, if owned.
 """
@@ -118,7 +118,7 @@ function delete_current_playing_from_owned_print(ioc)
     delete_track_from_playlist_print(ioc, track_id, playlist_id, st.item)
 end
 
-"pause_unpause_print(ioc) -> Bool"
+"pause_unpause_print(ioc) ---> Bool"
 function pause_unpause_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
@@ -132,7 +132,7 @@ end
 
 
 """
-    current_audio_features_print(ioc)  -> Bool
+    current_audio_features_print(ioc)  ---> Bool
 
 Audio features in two columns.
 """
@@ -163,7 +163,7 @@ function current_audio_features_print(ioc)
 end
 
 """
-   seek_in_track_print(ioc, decileioc)   -> Bool
+   seek_in_track_print(ioc, decileioc)   ---> Bool
 
 Resume playing from decile 0-9 in current track, where 1 is 1 / 10 of track length.
 """
@@ -186,7 +186,7 @@ function seek_in_track_print(ioc, decile)
 end
 
 """
-    help_seek_syntax_print(ioc) -> Bool
+    help_seek_syntax_print(ioc) ---> Bool
 
 Some suggestions for using the DataFrame syntax with Spotify.jl and this package.
 """
@@ -239,7 +239,7 @@ end
 
 
 """
-    current_metronome_print(ioc)  -> Bool
+    current_metronome_print(ioc)  ---> Bool
 
 Shows a beat / bar counter asyncronously until the end of track.
 """
@@ -289,7 +289,7 @@ end
 
 
 """
-    current_typicality_print(ioc)  -> Bool
+    current_typicality_print(ioc)  ---> Bool
 
 Compares current track with current context,
 i.e. selected audio features compared to 
@@ -325,6 +325,8 @@ function current_typicality_print(ioc)
     abnormality_rank_print(ioc, rpd)
     playlist_ranked_print_play(abnormality, ioc, playlist_data, playlist_ref)
 end
+
+warn_against_clones_print(ioc) = warn_against_clones_print(ioc, tracks_data_update())
 
 # TODO: look at histograms_plot, abnormality_rank_print. Reuse funcs, delete specifics.
 # TODO: Reuse t, but add a menu:
