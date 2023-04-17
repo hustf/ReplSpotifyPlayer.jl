@@ -351,7 +351,7 @@ function pick_number_in_range_and_print(ioc, rng)
 end
 
 """
-    read_number_from_keyboard(minval, maxval)
+    read_number_from_keyboard(rng)
     ---> Union{Nothing, Int64}
 
 We can't use readline(stdin) while in our special replmode - that would block.
@@ -378,3 +378,48 @@ function read_number_from_keyboard(rng)
     inpno
 end
 
+function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
+    io = color_set(ioc, :176)
+    # TODO emphasize in the same way as in replmode....
+    uinp = 'p'
+    count = 0
+    while uinp == 'p' && count < 3
+        color_set(io)
+        print(io, "\n$(repeat("  ", count))What does you say? (y: yes, Y: yes to all, n: no, N: no to all, p: play track to replace)")
+        uinp = read_single_char_from_keyboard("yYnNp", default)
+        println(io)
+        if uinp == 'p'
+            context_uri = playlist_ref.id
+            offset = Dict("uri" => track_id)
+            player_resume_playback(;context_uri, offset)
+            print(ioc, "\n  ")
+            sleep(1)
+            current_playing_print(ioc)
+            color_set(ioc)
+        end
+        count += 1
+    end
+    color_set(ioc)
+    uinp
+end
+
+"""
+    read_single_char_from_keyboard(string_allowed_characters, default::Char)
+    ---> Union{Nothing, Char}
+
+We can't use readline(stdin) while in our special replmode - that would block.
+
+If this is called from the normal REPL mode, it will be necessary
+to press enter after the character. 
+
+If a character not in string_allowed_characters is pressed, returns default.
+"""
+function read_single_char_from_keyboard(string_allowed_characters, default::Char)
+    c = Char(first(read(stdin, 1)))
+    print(stdout, c)
+    if c ∈ string_allowed_characters
+        c
+    else
+        default
+    end
+end

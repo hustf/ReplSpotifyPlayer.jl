@@ -217,6 +217,28 @@ function tracks_data_append_audio_features!(tracks_data; silent = true)
     tracks_data
 end
 
+function append_missing_audio_features!(tracks_data)
+    prna = propertynames(tracks_data)
+    notpresent = setdiff(wanted_feature_keys(), prna)
+    if ! isempty(notpresent)
+        v = Vector{Any}(fill(missing, nrow(tracks_data)))
+        nt = map(k-> k => copy(v), notpresent)
+        insertcols!(tracks_data, 3, nt...)
+    end
+end
+
+function insert_audio_feature_vals!(trackrefs_rw)
+    ! ismissing(trackrefs_rw[first(wanted_feature_keys())]) && return trackrefs_rw
+    fdic = get_audio_features_dic(trackrefs_rw[:trackid])
+    for (k,v) in fdic
+        trackrefs_rw[k] = v
+    end
+    trackrefs_rw
+end
+
+
+
+
 """
     sort_columns_missing_last(rw::DataFrameRow)
 
@@ -245,15 +267,13 @@ function warn_against_clones_print(ioc, tracks_data::DataFrame)
     warn_against_different_context_print(ioc, suspects_data, suspected_objects, tracks_data)
 end
 
-# TODO look into My Guitar gently weeps. suspected_objects have identical uris. (u, v) = (462, 461)
-# Couldn't we catch the discrepancy in warn_against_relink_print?????
-# TODO what's taking so much time in 'warn_against..' and is that necessary? We don't need to know the number of tracks. Print without details? We need playlist_id.
-
 function warn_against_different_context_print(ioc, suspects_data, suspected_objects, tracks_data)
     # suspects_data and suspected_objects are sorted and of the same length
     @assert length(suspected_objects) == nrow(suspects_data) 
     n = nrow(suspects_data)
-    println(color_set(ioc, :light_black), "\nAssessing $n clone pairs with respect to authentic origin \n(an album is more genuine than a generic collection)\n")
+    println(color_set(ioc, :light_black), "\nAssessing $n clone pairs with respect to authentic origin (an album is more genuine than e.g. a generic collection)\n")
+    # If user replies ('Y' or 'N'), no more questions will be asked. So this variable is defined outside the loop.
+    user_input = 'n'
     # index u, for the 'current' object
     for u in 1:n
         # look for v above and below u.
@@ -267,15 +287,19 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
         ou = suspected_objects[u]
         ov = suspected_objects[v]
         if prefer_adjacent_over_current(ou, ov)
-            #@show u, v
-            io = IOContext(color_set(ioc, :green))
+            track_id_u = SpTrackId(ou.uri)
+            plrefs_u = playlistrefs_containing_track(track_id_u, tracks_data)
+            # tracks data might temporarily contain tracks which are no longer
+            # referred in a playlist. We will delete unreferred tracks
+            # elsewhere. For now, just skip to the next item!
+            isempty(plrefs_u) && continue
+            io = color_set(ioc, :green)
             track_album_artists_print(io, ou)
             print(color_set(io, :light_black), "\n which is on a ")
             color_set(io)
             print(io, ou.album.album_type)
             print(color_set(io, :light_black), " and is referred in ")
-            track_id_u = SpTrackId(ou.uri)
-            plrefs_u = playlistrefs_containing_track(track_id_u, tracks_data)
+
             for plref in plrefs_u
                 length(plrefs_u) > 1 && print(ioc, "\n  ")
                 playlist_no_details_print(color_set(io, :blue), plref)         
@@ -283,7 +307,6 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
             end
             color_set(ioc)
             println(color_set(ioc, :light_black), "\n  ...we suggest to change to the identical track ")
-            # TODO we lost ioc keys...
             track_album_artists_print(color_set(ioc, :green), ov) 
             print(color_set(ioc, :light_black), "\n which is on an ")
             color_set(ioc)
@@ -296,8 +319,17 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
                 playlist_no_details_print(color_set(ioc, :blue), plref)         
                 print("  ")
             end
-            ioc = color_set(ioc, :normal)
-            println(ioc, "\nWhat does you say? (y: yes, Y: yes to all, n: no, N: no to all)")
+            if user_input ∉ "YN"
+                user_input = pick_ynYNp_and_print(ioc, 'n', first(plrefs_u), track_id_u)
+            end
+            color_set(ioc)
+            if user_input ∈ "Yy"
+                println(color_set(ioc, :normal), "\n  DO THE THING!")
+                replace_track_in_playlist(plrefs_u, track_id_u => track_id_v)
+            else 
+                println(color_set(ioc, :normal), "\n  Nothing changed.")
+            end
+            color_set(ioc)
             println(ioc)
         else
             # Knowing the adjacent clone, we prefer to keep the current.

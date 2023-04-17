@@ -108,7 +108,7 @@ function act_on_keystroke(char)
     # After the command, a line with the current state:
     print(ioc, "  ")
     current_playing_print(ioc)
-    color_set(ioc, :normal)
+    color_set(ioc)
     nothing
 end
 

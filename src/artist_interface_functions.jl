@@ -63,6 +63,7 @@ function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
             printstyled(io, " ", nrow(used_tracks_df), " tracks in your tracks data: ", color = :light_black)
         end
         for dfrw in eachrow(used_tracks_df)
+            color_set(io)
             track_id = dfrw[:trackid]
             track_name = dfrw[:trackname]
             print(io, "\n  ", track_name, " ")
@@ -241,9 +242,10 @@ julia> @time artist_get_all_tracks(artist_id)
 function artist_get_all_tracks(artist_id; silent = true)
     tracks_w_duplicates = Vector{SpTrackId}()
     album_ids = artist_get_all_albums(artist_id)
+    market = get_user_country()
     ! silent && println(stdout, "Retrieving tracks in albums:  ")
     for album_id in album_ids
-        json, waitsec = album_get_single(album_id; market = country)
+        json, waitsec = album_get_single(album_id; market)
         waitsec > 0 && throw("Too fast, whoa!")
         isempty(json) && throw("Error getting album_id $album_id")
         ! silent && print(stdout, json.name, "  ")

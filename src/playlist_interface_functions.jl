@@ -69,25 +69,6 @@ function track_ids_and_names_in_playlist(playlist_id::SpPlaylistId)
 end
 
 
-function append_missing_audio_features!(tracks_data)
-    prna = propertynames(tracks_data)
-    notpresent = setdiff(wanted_feature_keys(), prna)
-    if ! isempty(notpresent)
-        v = Vector{Any}(fill(missing, nrow(tracks_data)))
-        nt = map(k-> k => copy(v), notpresent)
-        insertcols!(tracks_data, 3, nt...)
-    end
-end
-function insert_audio_feature_vals!(trackrefs_rw)
-    ! ismissing(trackrefs_rw[first(wanted_feature_keys())]) && return trackrefs_rw
-    fdic = get_audio_features_dic(trackrefs_rw[:trackid])
-    for (k,v) in fdic
-        trackrefs_rw[k] = v
-    end
-    trackrefs_rw
-end
-
-
 "playlist_details_print(context::JSON3.Object) ---> nothing"
 function playlist_details_print(ioc, context::JSON3.Object)
     if context.type !== "playlist"
@@ -289,4 +270,46 @@ function playlist_no_details_print(ioc, playlist_ref::PlaylistRef)
         color_set(ioc)
     end
     nothing
+end
+
+
+"""
+    replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair)
+    replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair{SpTrackId, SpTrackId})
+
+All occurences of `from` in the playlists are replaced with `to`.
+`to` takes the place of 'from' in the original sequence of tracks.
+
+```
+julia> begin
+       from_to = SpTrackId("1cmjxqobVTrgAiJ0btAleN") => SpTrackId("7DsQgIwg23u9gooCxkRTu3")
+       plrefs = [PlaylistRef("73-74spm", "MTAsMGFmYTU1OWQ3MzE0ODgzOTljODg5OTgwNGY2YjZjMWUwMmQzMTIxMQ==", SpPlaylistId("1lXn74G3ahYlXQbI0ihbqF"))]
+       replace_track_in_playlist(plrefs, from_to)
+    end
+```
+
+"""
+function replace_track_in_playlist(plrefs, from_to::Pair)
+    from_track_id =  SpTrackId(from_to[1])
+    to_track_id =  SpTrackId(from_to[2])
+    replace_track_in_playlist(plrefs, from_track_id => to_track_id)
+end 
+function replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair{SpTrackId, SpTrackId})
+    for plref in plrefs
+        from_track_id = from_to[1]
+        to_track_id = from_to[2]
+        @assert from_track_id !== to_track_id
+        ids, names = track_ids_and_names_in_playlist(plref.id)
+        indices = findall(==(from_track_id), ids)
+        for i in indices
+            # The web API uses a zero-based index, Julia a one-based.
+            #println(stdout, "\nReplacing $(names[i]) , position $i in $(plref.name)")
+            #println(stdout, from_to)
+            snapshot_id1 = playlist_add_tracks_to_playlist(plref.id, [to_track_id]; position = i - 1)[1].snapshot_id
+            sleep(1)
+            snapshot_id2 = playlist_remove_playlist_item(plref.id, [from_track_id])[1].snapshot_id
+            sleep(1)
+        end
+        tracks_data_update(;forceupdate = true)
+    end
 end
