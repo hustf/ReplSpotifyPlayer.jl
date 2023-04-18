@@ -105,7 +105,7 @@ end
 
 
 """
-    artist_get_all_albums(artist_id; country = get_user_country(), include_groups = "")\\
+    artist_get_all_albums(artist_id; include_groups = "")\\
     ---> Vector{SpAlbumId},  prints to stdout
 
 # Non-obious parameters

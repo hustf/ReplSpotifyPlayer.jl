@@ -271,7 +271,7 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
     # suspects_data and suspected_objects are sorted and of the same length
     @assert length(suspected_objects) == nrow(suspects_data) 
     n = nrow(suspects_data)
-    println(color_set(ioc, :light_black), "\nAssessing $n clone pairs with respect to authentic origin (an album is more genuine than e.g. a generic collection)\n")
+    println(color_set(ioc, :light_black), "\nAssessing $n clone pairs with respect to authentic origin (an album is more genuine than e.g. a generic collection.).\n")
     # If user replies ('Y' or 'N'), no more questions will be asked. So this variable is defined outside the loop.
     user_input = 'n'
     # index u, for the 'current' object

@@ -110,7 +110,7 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
         return false
     end
     plo_id = playlist_details.owner.id
-    user_id = Spotify.get_user_name()
+    user_id = get_user_name()
     if plo_id !== String(user_id)
         print(ioc, "\n  ❌ Can't delete \"")
         playlist_details_print(ioc, playlist_id)

@@ -61,7 +61,7 @@ function current_context_print(ioc)
         elseif st.context.type == "playlist"
             playlist_id = SpPlaylistId(st.context.uri)
             # We don't know if this playlist is owned by user yet.
-            # is_track_in_playlist makes an api call, so avoid if the first returns true
+            # If `is_track_in_track_data` returns false, we can avoid the web API call in `is_track_in_playlist`. 
             if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
                 print(ioc, " Past end, in 'recommendations'")
             end
