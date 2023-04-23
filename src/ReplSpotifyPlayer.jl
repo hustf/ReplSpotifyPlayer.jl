@@ -80,7 +80,7 @@ function init()
     @assert isdefined(Base, :active_repl)
     PLAYERprompt[] = add_seventh_prompt_mode(Base.active_repl) 
     define_single_keystrokes!(PLAYERprompt[])
-    @info "Type : to enter mini player mode, e to exit."
+    @info "Type `:` to enter mini player mode, `e` to exit."
 end
 
 function __init__()

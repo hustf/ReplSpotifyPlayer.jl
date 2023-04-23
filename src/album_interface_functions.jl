@@ -8,7 +8,7 @@ album_details_print(ioc, album_id::SpAlbumId, o::JSON3.Object) ---> nothing\\
 """
 album_details_print(ioc, uri::String) = album_details_print(ioc, SpAlbumId(uri))
 function album_details_print(ioc, album_id::SpAlbumId)
-    market = get_user_country()
+    market = ""
     album = album_get_single(album_id; market)[1]
     album_details_print(ioc, album_id, album)
 end

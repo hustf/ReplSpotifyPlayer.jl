@@ -17,7 +17,7 @@ end
 The web API used directly has a limit of 50 tracks.
 """
 function get_multiple_tracks(track_ids)
-    market = get_user_country()
+    market = ""
     results = Vector{JSON3.Object}()
     for i in 1:50:length(track_ids)
         ie = min(i + 49, length(track_ids))

@@ -58,9 +58,11 @@ function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
     printstyled(io, " tracks on Spotify. ", color = :light_black)
     if nrow(used_tracks_df) > 0
         if nrow(used_tracks_df) == 1
-            printstyled(io, " One track in your playlists: ", color = :light_black)
+            print(io, " One")
+            printstyled(io, " track in your playlists: ", color = :light_black)
         else
-            printstyled(io, " ", nrow(used_tracks_df), " tracks in your tracks data: ", color = :light_black)
+            print(io, " ", nrow(used_tracks_df))
+            printstyled(io, " tracks in your tracks data: ", color = :light_black)
         end
         for dfrw in eachrow(used_tracks_df)
             color_set(io)
@@ -167,7 +169,7 @@ The latter scope is too wide a net, when the context is finding tracks from this
 """
 function artist_get_all_albums(artist_id; include_groups = ["album", "single", "compilation"])
     batchsize = 50
-    country = get_user_country()
+    country = ""
     albums = Vector{SpAlbumId}()
     for batchno = 0:200
         offset = batchno * batchsize
@@ -242,7 +244,7 @@ julia> @time artist_get_all_tracks(artist_id)
 function artist_get_all_tracks(artist_id; silent = true)
     tracks_w_duplicates = Vector{SpTrackId}()
     album_ids = artist_get_all_albums(artist_id)
-    market = get_user_country()
+    market = ""
     ! silent && println(stdout, "Retrieving tracks in albums:  ")
     for album_id in album_ids
         json, waitsec = album_get_single(album_id; market)

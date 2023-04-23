@@ -174,13 +174,13 @@ end
 
 
 """
-    abnormality_rank_print(ioc, rpd)
+    track_abnormality_rank_in_list_print(ioc, rpd)
 
 Print the current track's "abnormality" and
 how it ranks compared to the other tracks in the 
 playlist.
 """
-function abnormality_rank_print(ioc, rpd)
+function track_abnormality_rank_in_list_print(ioc, rpd)
     alldata = rpd.data_for_bins
     abnormality = euclidean_normalized_sample_deviation(alldata, rpd.track_values)
     io = color_set(ioc, :light_black)
@@ -212,7 +212,7 @@ function abnormality_rank_print(ioc, rpd)
     color_set(io)
     println(" ranked from most to least typical.")
     color_set(ioc)
-    true
+    ordinal
 end
 
 
@@ -248,34 +248,40 @@ function ordinal_string(ordinal, setsize)
 end
 
 """
-    playlist_ranked_print_play(rank_func::Function, ioc, playlist_tracks_data, playlist_ref)
+    playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, playlist_ref,
+        current_track_id; func_name = "")\\
     ---> true
     
-Calculate "abnormality" for all tracks. Sort by rising
-"abnormality", i.e. decreasing "typicality" for the playlist.
+Calculate f(playlist_tracks_data) for all tracks. Sort by rising
+return values.
 
-Print the list, the most typical track at the top.
-Offer to pick a track to resume playing from.
+Print the sorted list, emphasize track_id. For no emphasis, set track_id = nothing.
 
-TODO: Continue reducing number of arguments in calls.
-User should be given the oportunity 
- to sort on interesting criteria (in a while loop)
-Also, some playlists are > 99 tracks. Maybe not 
-picking from such large lists is OK.
+Ask for input: a track number in list to resume playing from.
 
+# Arguments
+
+`f` is a function that takes the argument playlist_tracks_data::DataFrame
+and returns a vector of Float64. Example: `abnormality`.
  For example, 'danceability', 'popularity' (if that still exists.)
 """
-function playlist_ranked_print_play(rank_func::Function, ioc, playlist_tracks_data, playlist_ref)
+function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, playlist_ref,
+     current_track_id; func_name = "")
     track_ids = playlist_tracks_data[!,:trackid]
     track_names = playlist_tracks_data[!,:trackname]
-    abnormalities = rank_func(playlist_tracks_data)
+    fvalues = f(playlist_tracks_data)
     playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
     print(color_set(ioc, :light_black), " sorted increasing by ")
     color_set(ioc, :white)
-    print(color_set(ioc, :white), rank_func)
+    if func_name == ""
+        print(ioc, f)
+    else
+        print(ioc, func_name)
+    end
     color_set(ioc)
     println(ioc, ":")
-    sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_values_and_print(ioc, track_ids, track_names, abnormalities)
+    sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_values(track_ids, track_names, fvalues)
+    playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id)
     select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_names)
 end
 
@@ -298,24 +304,34 @@ function abnormality(playlist_tracks_data::DataFrame)
     end
     abnormalities
 end
-function sort_playlist_by_values_and_print(ioc, track_ids, track_names, values)
+function sort_playlist_by_values(track_ids, track_names, values)
     @assert length(track_ids) == length(track_names) == length(values)
-    n = length(track_ids)
-    # Sort playlist by abnormality
     perm = sortperm(values)
-    sorted_track_ids = track_ids[perm]
-    sorted_track_names = track_names[perm]
-    sorted_values = values[perm]
+    return track_ids[perm], track_names[perm], values[perm]
+end
+function playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names, sorted_values, emphasize_track_id)
+    n = length(sorted_track_ids)
     for i in 1:n
         print(ioc, lpad(sorted_track_names[i], 81))
         print(ioc, "  ")
-        print(ioc, lpad(round(values[i]; digits = 3), 5))
-        println(ioc, lpad(ordinal_string(i, n), 12))
+        print(ioc, lpad(round(sorted_values[i]; digits = 3), 5))
+        print(ioc, lpad(ordinal_string(i, n), 12))
+        if sorted_track_ids[i] == emphasize_track_id
+             print(ioc, " ←")
+        else
+            print(ioc, "  ")
+        end
+        if get(ioc, :print_ids, false)
+            print(ioc, " ")
+            show(ioc, MIME("text/plain"), sorted_track_ids[i])
+            color_set(ioc)
+        end
+        println(ioc)
     end
     return sorted_track_ids, sorted_track_names, sorted_values
 end
 function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_track_names)
-    inpno = pick_number_in_range_and_print(ioc, 1:length(sorted_track_ids))
+    inpno = input_number_in_range_and_print(ioc, 1:length(sorted_track_ids))
     isnothing(inpno) && return nothing
     track_id = sorted_track_ids[inpno]
     track_name = sorted_track_names[inpno]
@@ -335,13 +351,14 @@ function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sort
     println(io)
     context_uri = playlist_ref.id
     offset = Dict("uri" => track_id)
+
     player_resume_playback(;context_uri, offset)
     # Avoid having the previous track shown in status line...
     sleep(1)
     true
 end
 
-function pick_number_in_range_and_print(ioc, rng)
+function input_number_in_range_and_print(ioc, rng)
     io = color_set(ioc, :176)
     print(io, "Type number ∈ $rng to play! Press enter to do nothing: ")
     inpno = read_number_from_keyboard(rng)
@@ -390,8 +407,23 @@ function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
         println(io)
         if uinp == 'p'
             context_uri = playlist_ref.id
-            offset = Dict("uri" => track_id)
-            player_resume_playback(;context_uri, offset)
+#            offset = Dict("uri" => track_id)  # FIX BUG:
+#= Bad:           (probably not avaiable wordwide / in the US.)                                                                                                                                                                                                                                                                                        
+       You picked:   Sorgsen ton  spotify:track:6bysGFOuiYR752CKDUldYm from 107-108spm  spotify:playlist:0bkPv8j98ijcrYJDyqrTLG                                                                                                                                                                                 
+       context_uri = 0bkPv8j98ijcrYJDyqrTLG                                                                                                                                                                                                                                                                     
+       offset = Dict{String, SpTrackId}("uri" => 6bysGFOuiYR752CKDUldYm)                                                                                                                                                                                                                                        
+       =#
+ #= Good:
+       You picked:   Soul Killing  spotify:track:4CXVVMPsSGvhZjbp4s9k0S from 107-108spm  spotify:playlist:0bkPv8j98ijcrYJDyqrTLG
+       context_uri = 0bkPv8j98ijcrYJDyqrTLG
+       offset = Dict{String, SpTrackId}("uri" => 4CXVVMPsSGvhZjbp4s9k0S)
+       =#
+
+            offset = Dict("uri" => track_id, "market" => "NO")  # TODO FIX! Maybe retrieve the track (without market argument) if failed. Put in separate function.
+            response = player_resume_playback(;context_uri, offset)
+            @show response[2]
+            @show response[1]
+
             print(ioc, "\n  ")
             sleep(1)
             current_playing_print(ioc)
@@ -422,4 +454,63 @@ function read_single_char_from_keyboard(string_allowed_characters, default::Char
     else
         default
     end
+end
+
+
+"""
+    characters_to_ansi_escape_sequence(s)
+
+Shorthands that make writing mixed-formatting more Wysiwyg.
+This 'returns' to :normal, which most often is not what we want
+in this program. So most prints modify IOContext instead and
+can't use these shorthands.
+
+# Example
+
+```
+begin
+menu =  \"\"\"
+        ¨e : exit.     ¨f(¨→) : forward.     ¨b(¨←) : back.     ¨p: pause, play.     ¨0-9:  seek.
+        ¨del(¨fn + ¨⌫  ) : delete from playlist.          ¨c : context.          ¨m : musician.
+        ¨i : toggle ids. ¨r : rhythm test. ¨a : audio features. ¨h : housekeeping. ¨? : syntax.
+            Sort list, play selected          ¨t : by typicality.     ¨o : other features.
+        \"\"\"
+    print(stdout, characters_to_ansi_escape_sequence(menu))
+end
+```
+
+"""
+function characters_to_ansi_escape_sequence(s)
+    l = text_colors[:light_black]
+    b = text_colors[:bold]
+    n = text_colors[:normal]
+    s = replace(s, "¨" => b , 
+        ":" =>  "$n$l:",
+        "." => ".$n",
+        " or" => "$n$l or$n",
+        "+" => "$n+",
+        "(" => "$n(",
+        ")" => "$n)",
+        "~" => "$n$l")
+    s *= n
+end
+
+
+"""
+    color_set(io, col::Union{Int64, Symbol})\\
+    color_set(ioc::IO)\\
+    ---> IOContext
+
+We want to a 'context color' down through the function hierarcy, where
+the replmode menue is topmost.
+"""
+function color_set(io, col::Union{Int64, Symbol})
+    ioc = IOContext(io, :context_color => col)
+    color_set(ioc)
+    ioc
+end
+function color_set(ioc::IO)
+  col = get(ioc, :context_color, :normal)
+  print(ioc, text_colors[col])
+  ioc
 end

@@ -1,17 +1,38 @@
 # ReplSpotifyPlayer
-Built on [Spotify.jl](https://github.com/kwehmeyer/Spotify.jl)'s REPL player. Try the master version out first!
+Built on the web API in [Spotify.jl](https://github.com/kwehmeyer/Spotify.jl).
 
-This package has an extended REPL player-mode. It helps where Spotify's current player is lacking.
+This adds a 'Spotify-mode' to the Julia REPL. Use it in combination with Spotify's app. 
+You can do some new things from this mode. Jump back to the `julia>` prompt 
+to query and use the locally stored dataframe of tracks, audio features and playlist references.
 
-- In which of your playlists does this track appear?
-- What are the musical features of this track?
-- Is this artist already in your playlists, and which?
-- Statistics of the music in this playlist?
-- Is the rhythm as judged by Spotify's algorithm? Check with the metronome!
+```
+julia> # Press ':'
 
-The Tracks DataFrame TDF[] is a global, stored between sessions and updated behind the scenes.
+julia> 
+e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
+del(fn + ⌫  ) : delete track from playlist.       c : context.       m : musician.
+i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
+      Sort playlist, then select        t : by typicality.     o : other features.
+  Harry's Record Machine \ Scratch Marchin' \ Kormac
+ ◍ >
+```
 
-# Example
+
+## What more you can do with it
+
+Maybe you run Spotify on the phone and don't want to pick it up?  
+You can also maintain your playlists in new ways:
+
+- In which of your playlists does the current track appear?
+- Identify bad fits in playlists.
+- Is this artist already in your playlists, and where?
+- Make barplots of danceability, beats per bar and other audio features in playlists. 
+- Verify rhythm with the metronome.
+- Suggest replacing tracks with original source tracks, make searching easier.
+- Rebuild playlists based on audio or genre features (use `julia>` prompt for this!)
+- Show and use genre information  (use `julia>` prompt)
+
+## Installation
 ```julia-repl
 (@v1.8) pkg> registry add https://github.com/hustf/M8
 
@@ -23,9 +44,11 @@ julia> using ReplSpotifyPlayer
 
 julia> # Press ':'
 
-julia>    e : exit.    f(→) : forward.  b(←) : back.  p: pause, play.  0-9:  seek.
-   a : analysis.    l : context.       del(fn + ⌫  ) : delete from playlist.
-   i : toggle ids.     s : search syntax.      m : musician         r : rhythm
-  Rose \ Hybrid \ Swingrowers
+julia> 
+e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
+del(fn + ⌫  ) : delete track from playlist.       c : context.       m : musician.
+i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
+      Sort playlist, then select        t : by typicality.     o : other features.
+  Harry's Record Machine \ Scratch Marchin' \ Kormac
  ◍ >
 ```

@@ -53,7 +53,7 @@ julia> track_ids_names = hcat(track_ids_and_names_in_playlist(playlist_id)...)
 """
 function track_ids_and_names_in_playlist(playlist_id::SpPlaylistId)
     fields = "items(track(name,id,is_playable)), next"
-    market = get_user_country()
+    market = ""
     o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100, market);
     track_ids = [SpTrackId(it.track.id) for it in o.items if is_item_track_playable(it)]
     track_names = [string(it.track.name) for it in o.items if is_item_track_playable(it)]
@@ -101,7 +101,7 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
         println(ioc)
         return false
     end
-    market = get_user_country()
+    market = ""
     playlist_details = Spotify.Playlists.playlist_get(playlist_id; market)[1]
     if isempty(playlist_details)
         print(ioc, "\n  ❌ Delete: Can't get playlist details from ")
@@ -145,7 +145,7 @@ end
 """
 function is_track_in_playlist(t::SpTrackId, playlist_id::SpPlaylistId)
     fields = "items(track(name,id)), next"
-    market = get_user_country()
+    market = ""
     o, waitsec = Spotify.Playlists.playlist_get_tracks(playlist_id; fields, limit = 100, market);
     track_ids = o.items .|> i -> i.track.id |> SpTrackId
     t in track_ids && return true
@@ -230,7 +230,7 @@ wanted_feature_pair(p) = p[1] ∈ wanted_feature_keys()
 
 "playlist_details_print(playlist_id::SpPlaylistId)"
 function playlist_details_print(ioc, playlist_id::SpPlaylistId)
-    market = get_user_country()
+    market = ""
     pld = Spotify.Playlists.playlist_get(playlist_id; market)[1]
     if isempty(pld)
         println(ioc, "Can't get playlist details.")
@@ -274,27 +274,28 @@ end
 
 
 """
-    replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair)
-    replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair{SpTrackId, SpTrackId})
+    replace_track_in_playlists(plrefs::Vector{PlaylistRef}, from_to::Pair)
+    replace_track_in_playlists(plrefs::Vector{PlaylistRef}, from_to::Pair{SpTrackId, SpTrackId})
 
-All occurences of `from` in the playlists are replaced with `to`.
-`to` takes the place of 'from' in the original sequence of tracks.
+All occurences of `from` in the online playlists are replaced with `to` in the same position.
+
+Local data is not updated here, as this is expected to be called from a loop.
 
 ```
 julia> begin
        from_to = SpTrackId("1cmjxqobVTrgAiJ0btAleN") => SpTrackId("7DsQgIwg23u9gooCxkRTu3")
        plrefs = [PlaylistRef("73-74spm", "MTAsMGFmYTU1OWQ3MzE0ODgzOTljODg5OTgwNGY2YjZjMWUwMmQzMTIxMQ==", SpPlaylistId("1lXn74G3ahYlXQbI0ihbqF"))]
-       replace_track_in_playlist(plrefs, from_to)
+       replace_track_in_playlists(plrefs, from_to)
     end
 ```
 
 """
-function replace_track_in_playlist(plrefs, from_to::Pair)
+function replace_track_in_playlists(plrefs, from_to::Pair)
     from_track_id =  SpTrackId(from_to[1])
     to_track_id =  SpTrackId(from_to[2])
-    replace_track_in_playlist(plrefs, from_track_id => to_track_id)
+    replace_track_in_playlists(plrefs, from_track_id => to_track_id)
 end 
-function replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair{SpTrackId, SpTrackId})
+function replace_track_in_playlists(plrefs::Vector{PlaylistRef}, from_to::Pair{SpTrackId, SpTrackId})
     for plref in plrefs
         from_track_id = from_to[1]
         to_track_id = from_to[2]
@@ -303,13 +304,10 @@ function replace_track_in_playlist(plrefs::Vector{PlaylistRef}, from_to::Pair{Sp
         indices = findall(==(from_track_id), ids)
         for i in indices
             # The web API uses a zero-based index, Julia a one-based.
-            #println(stdout, "\nReplacing $(names[i]) , position $i in $(plref.name)")
-            #println(stdout, from_to)
             snapshot_id1 = playlist_add_tracks_to_playlist(plref.id, [to_track_id]; position = i - 1)[1].snapshot_id
-            sleep(1)
+            sleep(1) # This is probably not needed. But we don't imagine it will be used very often.
             snapshot_id2 = playlist_remove_playlist_item(plref.id, [from_track_id])[1].snapshot_id
-            sleep(1)
+            sleep(1) # This is probably not needed.
         end
-        tracks_data_update(;forceupdate = true)
     end
 end

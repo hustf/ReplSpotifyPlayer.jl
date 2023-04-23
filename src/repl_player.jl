@@ -13,13 +13,14 @@ function current_playing_print(ioc)
     if ! isnothing(st.item)
         track_album_artists_print(ioc, st.item)
     elseif st.currently_playing_type == "unknown"
-        print(ioc, "currently playing type: unknown")
+        print(ioc, "Currently playing type: unknown")
     else
-        print(ioc, "currently playing type: $(st.currently_playing_type)")
+        print(ioc, "Currently playing type: $(st.currently_playing_type)")
     end
     println(ioc)
     true
 end
+
 """
     current_context_print(ioc) ---> Bool
 
@@ -203,18 +204,13 @@ julia> playtracks(x) = begin;Player.player_resume_playback(;uris = x);println(le
 
 (`playtracks` is already defined and exported by this module.)
 
-# Examples
+# Example
+
 Seek for " love " in the Tracks DataFrame TDF[] and play all results.
 
 ```julia-repl
 julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
 12
-```
-
-Seek for unusual pulses and play those tracks! See `metronome` for checking your versus Spotify's sense of rhythm!
-```julia-repl
-julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
-130
 ```
 """
     show(ioc, MIME("text/plain"),mymd)
@@ -289,13 +285,23 @@ end
 
 
 """
-    current_typicality_print(ioc)  ---> Bool
+    sort_playlist_typicality_select_print(ioc)  ---> Bool
 
 Compares current track with current context,
 i.e. selected audio features compared to 
 playlist or album values.
 """
-function current_typicality_print(ioc)
+sort_playlist_typicality_select_print(ioc) = current_playlist_ranked_select_print(abnormality, ioc)
+
+
+"""
+    current_playlist_ranked_select_print(f, ioc)
+
+   `f` is a function that takes the argument playlist_tracks_data::DataFrame
+        and returns a vector of Float64. Example: `abnormality`.
+    `func_name` can be passed as a keyword argument. Use this for anonymous functions.
+"""
+function current_playlist_ranked_select_print(f, ioc; func_name = "")
     st = get_player_state(ioc)
     isempty(st) && return false
     isnothing(st.item) && return false
@@ -320,15 +326,52 @@ function current_typicality_print(ioc)
         color_set(ioc)
         return false
     end
-    rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
-    histograms_plot(ioc, rpd)
-    abnormality_rank_print(ioc, rpd)
-    playlist_ranked_print_play(abnormality, ioc, playlist_data, playlist_ref)
+    # CONSIDER: can this be generalized?
+    if f == abnormality
+        rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
+        histograms_plot(ioc, rpd)
+        track_abnormality_rank_in_list_print(ioc, rpd)
+    end
+    playlist_ranked_print_play(f, ioc, playlist_data, playlist_ref, track_id; func_name)
 end
 
-warn_against_clones_print(ioc) = warn_against_clones_print(ioc, tracks_data_update())
+function sort_playlist_other_select_print(ioc)
+    # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
+    println(ioc, "Track feature select")
+    vs = wanted_feature_keys()
+    rng = 1:length(wanted_feature_keys())
+    for (i, s) in enumerate(vs)
+        println("  ", lpad(i, 3), "  ", s)
+    end
+    io = color_set(ioc, :176)
+    print(io, "Type feature number ∈ $rng to sort playlist by! Press enter to do nothing: ")
+    inpno = read_number_from_keyboard(rng)
+    println(io)
+    color_set(ioc)
+    isnothing(inpno) && return nothing
+    picked_key = vs[inpno]
+    # Capture picked_key in this function that we pass on:
+    function f(playlist_tracks_data)
+        tr_af = playlist_tracks_data[!, picked_key]
+        collect(tr_af)
+    end
+    current_playlist_ranked_select_print(f, ioc; func_name = "$(picked_key)")
+end
 
-# TODO: look at histograms_plot, abnormality_rank_print. Reuse funcs, delete specifics.
+housekeeping_clones_print(ioc) = housekeeping_clones_print(ioc, tracks_data_update())
+
+
+function toggle_ids_print(ioc)
+    if get(ioc, :print_ids, false)
+        println(ioc, " No ids from now on")
+        push!(IO_DICT, :print_ids => false)
+    else
+        println(ioc, " Including ids from now on")
+        push!(IO_DICT, :print_ids => true)
+    end
+    IOContext(stdout, IO_DICT...)
+end
+# TODO: look at histograms_plot, track_rank_in_list_print. Reuse funcs, delete specifics.
 # TODO: Reuse t, but add a menu:
 # typicality, and other funcs like danceability.
 # Reuse current_typicality print.

@@ -26,17 +26,6 @@ function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::Ab
     act_on_keystroke(char)
 end
 
-function color_set(io, col::Union{Int64, Symbol})
-      ioc = IOContext(io, :context_color => col)
-      color_set(ioc)
-      ioc
-end
-function color_set(ioc::IO)
-    col = get(ioc, :context_color, :normal)
-    print(ioc, text_colors[col])
-    nothing
-end
-
 const IO_DICT = Dict(:context_color => :green, :print_ids => false, :silent => false)
 function act_on_keystroke(char)
     # Most calls from here on
@@ -57,7 +46,7 @@ function act_on_keystroke(char)
         sleep(1)
     elseif c == 'p'
         pause_unpause_print(ioc)
-    elseif c == 'l'
+    elseif c == 'c'
         io = color_set(ioc, :light_blue)
         print(io, "  ")
         current_context_print(io)
@@ -76,14 +65,7 @@ function act_on_keystroke(char)
         print(ioc, " ")
         seek_in_track_print(ioc, Meta.parse(string(c)))
     elseif c == 'i'
-        if get(ioc, :print_ids, false)
-            println(ioc, "No ids from now on")
-            push!(IO_DICT, :print_ids => false)
-        else
-            println(ioc, "Including ids from now on")
-            push!(IO_DICT, :print_ids => true)
-        end
-        ioc = IOContext(stdout, IO_DICT...)
+        ioc = toggle_ids_print(ioc)
     elseif c == '?'
         io = color_set(ioc, :normal)
         help_seek_syntax_print(io)
@@ -98,11 +80,15 @@ function act_on_keystroke(char)
         color_set(ioc)
     elseif c == 't'
         io = color_set(ioc, :normal)
-        current_typicality_print(io)
+        sort_playlist_typicality_select_print(io)
         color_set(ioc)
-    elseif c == 'c'
+    elseif c == 'o'
+        io = color_set(ioc, :normal)
+        sort_playlist_other_select_print(io)
+        color_set(ioc)
+    elseif c == 'h'
         io = color_set(ioc, :green)
-        warn_against_clones_print(io)
+        housekeeping_clones_print(io)
         color_set(ioc)
     end
     # After the command, a line with the current state:
@@ -115,22 +101,8 @@ end
 
 
 
-function print_menu()
-    l = text_colors[:light_black]
-    b = text_colors[:bold]
-    n = text_colors[:normal]
-    menu = """
-       ¨e : exit.    ¨f(¨→) : forward.  ¨b(¨←) : back.  ¨p: pause, play.  ¨0-9:  seek.
-       ¨a : analysis.     ¨l : context.      ¨del(¨fn + ¨⌫  ) : delete from playlist.
-       ¨i : toggle ids.   ¨m : musician.     ¨r : rhythm.           ¨t : typicality. 
-       ¨c : cleanup clones.                                           ¨? : syntax.
-    """
-    menu = replace(menu, "¨" => b , ":" =>  "$n$l:", "." => ".$n", " or" => "$n$l or$n", "+" => "$n+", "(" => "$n(", ")" => "$n)")
-    print(stdout, menu)
-    print(stdout, n)
-end
 
-# How we will respond to pressing enter when in mini player mode
+# Respond to pressing enter when in mini player mode
 on_non_empty_enter(s) = print_menu_and_current_playing()
 
 function print_menu_and_current_playing()
@@ -156,6 +128,7 @@ function triggermini(state::LineEdit.MIState, repl::LineEditREPL, char::Abstract
                 # Type of LineEdit.PromptState
                 prompt_state = LineEdit.state(state, PLAYERprompt[])
                 prompt_state.input_buffer = copy(iobuffer)
+                println(stdout)
                 print_menu_and_current_playing()
             end
         end
@@ -224,14 +197,15 @@ function define_single_keystrokes!(special_prompt)
         d['b'] = wrap_command
         d['f'] = wrap_command
         d['p'] = wrap_command
-        d['l'] = wrap_command
+        d['c'] = wrap_command
         d['a'] = wrap_command
         d['i'] = wrap_command
         d['?'] = wrap_command
         d['m'] = wrap_command
         d['r'] = wrap_command
         d['t'] = wrap_command
-        d['c'] = wrap_command
+        d['h'] = wrap_command
+        d['o'] = wrap_command
         d['0'] = wrap_command
         d['1'] = wrap_command
         d['2'] = wrap_command
@@ -250,4 +224,15 @@ function define_single_keystrokes!(special_prompt)
         deletedict = very_special_dict['3']
         deletedict['~'] =  wrap_command
     end
+end
+
+
+function print_menu()
+    menu = """
+    ¨e : exit.     ¨f(¨→) : forward.     ¨b(¨←) : back.     ¨p: pause, play.     ¨0-9:  seek.
+    ¨del(¨fn + ¨⌫  ) : delete track from playlist.       ¨c : context.       ¨m : musician.
+    ¨i : toggle ids. ¨r : rhythm test. ¨a : audio features. ¨h : housekeeping. ¨? : syntax.
+          Sort playlist, then select        ¨t : by typicality.     ¨o : other features.
+    """
+    print(stdout, characters_to_ansi_escape_sequence(menu))
 end

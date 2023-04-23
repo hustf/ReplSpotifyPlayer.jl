@@ -1,7 +1,7 @@
 """
     tracks_data_load_and_update(;silent = true)
 
-Loads tracks data frame from file and updates it. Called when loading the module. 
+Loads tracks data frame from file and updates it from online playlists.
 Does not save to disk, maybe use `tracks_data_update()` instead?
 
 # Example
@@ -38,6 +38,7 @@ function tracks_data_update(;forceupdate = false)
     end
     TDF[]
 end
+
 """
     tracks_data_delete_other_playlist_snapshots!(tracks_data, playlistref)
 
@@ -259,19 +260,27 @@ end
 
 
 
-function warn_against_clones_print(ioc, tracks_data::DataFrame)
+function housekeeping_clones_print(ioc, tracks_data::DataFrame)
     suspects_data = tracks_with_clones_data(tracks_data)
     # Get tracks objects inlculding potential 'linked_from' fields. 
     suspected_objects = get_multiple_tracks(suspects_data[!, :trackid])
-    warn_against_relink_print(ioc, suspects_data, suspected_objects)
-    warn_against_different_context_print(ioc, suspects_data, suspected_objects, tracks_data)
+    clones_metadata_print(ioc, suspects_data, suspected_objects)
+    suggest_and_make_replacements_print(ioc, suspects_data, suspected_objects, tracks_data)
+    remove_unreferred_tracks!(tracks_data)
+    save_tracks_data(tracks_data)
 end
 
-function warn_against_different_context_print(ioc, suspects_data, suspected_objects, tracks_data)
+
+# There is playlistref, playlistref_1, etc.
+# However, if the first value is missing, all 
+# of the columns are missing.
+remove_unreferred_tracks!(tracks_data) = filter!(:playlistref => ! ismissing, tracks_data)
+
+function suggest_and_make_replacements_print(ioc, suspects_data, suspected_objects, tracks_data)
     # suspects_data and suspected_objects are sorted and of the same length
     @assert length(suspected_objects) == nrow(suspects_data) 
     n = nrow(suspects_data)
-    println(color_set(ioc, :light_black), "\nAssessing $n clone pairs with respect to authentic origin (an album is more genuine than e.g. a generic collection.).\n")
+    println(color_set(ioc, :light_black), "\nAssessing $n clones in pairs with respect to authentic origin. An album is more genuine than e.g. a generic collection.).\n")
     # If user replies ('Y' or 'N'), no more questions will be asked. So this variable is defined outside the loop.
     user_input = 'n'
     # index u, for the 'current' object
@@ -286,7 +295,8 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
         end
         ou = suspected_objects[u]
         ov = suspected_objects[v]
-        if prefer_adjacent_over_current(ou, ov)
+        this_market = get_user_country()
+        if prefer_adjacent_over_current(ou, ov, this_market)
             track_id_u = SpTrackId(ou.uri)
             plrefs_u = playlistrefs_containing_track(track_id_u, tracks_data)
             # tracks data might temporarily contain tracks which are no longer
@@ -301,9 +311,9 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
             print(color_set(io, :light_black), " and is referred in ")
 
             for plref in plrefs_u
-                length(plrefs_u) > 1 && print(ioc, "\n  ")
+                length(plrefs_u) > 1 && print(io, "\n  ")
                 playlist_no_details_print(color_set(io, :blue), plref)         
-                print("  ")
+                print(ioc, "  ")
             end
             color_set(ioc)
             println(color_set(ioc, :light_black), "\n  ...we suggest to change to the identical track ")
@@ -317,33 +327,48 @@ function warn_against_different_context_print(ioc, suspects_data, suspected_obje
             for plref in plrefs_v
                 length(plrefs_v) > 1 && print(ioc, "\n  ")
                 playlist_no_details_print(color_set(ioc, :blue), plref)         
-                print("  ")
+                print(ioc, "  ")
+            end
+            if ou.album.album_type == ov.album.album_type
+                print(color_set(ioc, :light_black), " The suggestion is based on market availability.")
             end
             if user_input ∉ "YN"
                 user_input = pick_ynYNp_and_print(ioc, 'n', first(plrefs_u), track_id_u)
             end
             color_set(ioc)
             if user_input ∈ "Yy"
-                println(color_set(ioc, :normal), "\n  DO THE THING!")
-                replace_track_in_playlist(plrefs_u, track_id_u => track_id_v)
+                println(color_set(ioc, :normal), "\n  Replacing clone track with suggested original.")
+                replace_track_in_playlists(plrefs_u, track_id_u => track_id_v)
             else 
                 println(color_set(ioc, :normal), "\n  Nothing changed.")
             end
             color_set(ioc)
             println(ioc)
         else
-            # Knowing the adjacent clone, we prefer to keep the current.
+            # The current clone ou is preferrable over the adjacent, ov. Do nothing.
+            println(ioc, "No suggestion for clones ",     (ou.album.album_type, ov.album.album_type) )
+            print(ioc, "    ")
+            track_album_artists_print(ioc, ou)
+            print(ioc, "\n    ") 
+            track_album_artists_print(ioc, ov)
+            println(ioc) 
         end
     end # for
+    tracks_data_update(;forceupdate = true)
+    println(color_set(ioc, :light_black), "\nFinished assessing clone pairs with respect to authentic origin.\n")
 end
 
+
 "prefer_adjacent_over_current(o_cur, o_adj) ---> Bool"
-function prefer_adjacent_over_current(o_cur, o_adj)
+function prefer_adjacent_over_current(o_cur, o_adj, this_market)
     # CONSIDER Note, this does not yet cover the case:
     # An album has been re-released, but is essentially the same.
     # An example is "Made In Medina": spotify:album:3hBjCRF8nbh374xqB66Ojl and spotify:album:5umeFXcIuIdkNJc0fpvIwt
     # Not having a good solution, we do nothing so far (return false). But other checks could be added 
     # when the first return false.
+    #
+    # Criteria compares ("this album type", "adjacent album type"), both considered clones
+    # of each other 
     criteria = Set([
         ("single", "album"),
         ("compilation", "album"),
@@ -351,15 +376,52 @@ function prefer_adjacent_over_current(o_cur, o_adj)
         ("appears_on", "album"),
         ("appears_on", "single"),
         ("appears_on", "compilation")])
-    (o_cur.album.album_type, o_adj.album.album_type) ∈ criteria
+    if (o_cur.album.album_type, o_adj.album.album_type) ∈ criteria
+        return true
+    end
+    available_markets_cur = get(o_cur, :available_markets, String[])
+    available_markets_adj = get(o_adj, :available_markets, String[])
+
+    market_state_cur = market_state(available_markets_cur, this_market)
+    market_state_adj = market_state(available_markets_adj, this_market)
+    # Criteria compares (market_state_cur , market_state_adj), both considered clones
+    # of each other 
+
+    market_criteria = Set([
+        (:empty, :included),
+        (:not_included, :included),
+        (:not_included, :empty)
+    ])
+    if (market_state_cur , market_state_adj) ∈ market_criteria
+        return true
+    end
+    false
 end
 
-"""
-    warn_against_relink_print(ioc, suspects_data, suspected_objects)
+function market_state(state, this_market)
+    if state ==  Union{}[]
+        :empty
+    elseif this_market ∈ state
+        :included
+    elseif this_market ∉ state
+        :not_included
+    else
+        throw("Not expected .available_market: $state \n $this_market")
+    end
+end
 
-This prints some non-interesting lines. Perhaps add a silent keyword, or drop it all.
+
 """
-function warn_against_relink_print(ioc, suspects_data, suspected_objects)
+    clones_metadata_print(ioc, suspects_data, suspected_objects)
+
+Prior to housekeeping, print metadata about clones. This aids in
+housekeeping. 
+
+Clones sound identical, but have different metadata.
+Some clone tracks are acceptable, but not nice.
+"""
+function clones_metadata_print(ioc, suspects_data, suspected_objects)
+    this_market = get_user_country()
     println(color_set(ioc, :light_black), "Checking $(length(suspected_objects)) clone tracks for relinking and unavailability.")
     for (track_object, track_row) in zip(suspected_objects, eachrow(suspects_data))
         linkedfrom = get(track_object, :linked_from, nothing)
@@ -381,18 +443,29 @@ function warn_against_relink_print(ioc, suspects_data, suspected_objects)
                 throw("Unexpected value. Decide what to do (replace trackid in playlist?).")
             end
         else
-            # printstyled(stdout, track_row[:trackname], " has no linkedfrom field. ", color = :176)
-            is_playable = get(track_object, :is_playable, nothing)
-            # printstyled(stdout, " .is_playable: ", is_playable, color = :light_black)
-            if ! is_playable
-                restrictions = get(track_object, :restrictions, nothing)
-                @assert ! isnothing(restrictions)
-                printstyled(stdout, track_row[:trackname], " has no linkedfrom field. ", color = :176)
-                printstyled(stdout, " .is_playable: ", is_playable, color = :light_black)
-                printstyled(stdout, " .restrictions.reason: ", restrictions.reason, color = :yellow)
+            available_markets = get(track_object, :available_markets, String[])
+            if available_markets ==  Union{}[]
+                io = IOContext(color_set(ioc, :white), :print_ids => true)
+                print(io,  "'available markets' is empty:    ")
+                print(io, "    ")
+                track_album_artists_print(io, track_object)
+                println(ioc) 
+            else
+                if this_market ∈ available_markets
+                    io = IOContext(color_set(ioc, :green), :print_ids => true)
+                    print(io,  "'available markets' includes $this_market and $(length(available_markets) - 1) others: ")
+                    print(io, "    ")
+                    track_album_artists_print(io, track_object)
+                    println(ioc) 
+                else
+                    io = IOContext(color_set(ioc, :magenta), :print_ids => true)
+                    print(io,  "'available markets' excludes $this_market: ")
+                    print(io, "    ")
+                    track_album_artists_print(io, track_object)
+                    println(io, "                'available markets' = $available_markets\n")
+                end
             end
         end
-        #println(stdout)
     end
 end 
 function tracks_with_clones_data(tracks_data)

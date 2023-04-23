@@ -69,7 +69,8 @@ julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :tr
 ```
 """
 function playtracks(v)
-    player_resume_playback(;uris = v)
+    @assert ! isempty(v)
+    player_resume_playback(;uris = SpTrackId.(v))
     println(length(v))
 end
 
@@ -137,3 +138,4 @@ function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, sample_n
     single_sample_values = map(featuretype-> featuretype[sample_no], sets)
     euclidean_normalized_sample_deviation(sets, single_sample_values)
 end
+

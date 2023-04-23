@@ -1,7 +1,10 @@
 # This file concerns loading and saving tracks data between memory and file.
 
 fullpath_trackrefs() = joinpath(homedir(), ".repl_player_tracks.csv")
-save_tracks_data(tracks_data; fpth = fullpath_trackrefs()) = CSV.write(fpth, tracks_data)
+function save_tracks_data(tracks_data; fpth = fullpath_trackrefs())
+    CSV.write(fpth, tracks_data)
+    println(stdout, "\nSaving.")
+end
 save_tracks_data(; fpth = fullpath_trackrefs()) = save_tracks_data(TDF[]; fpth )
 function _loadtypes(i, name)
     name == :trackid ? SpTrackId : nothing
