@@ -331,6 +331,12 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "")
         rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
         histograms_plot(ioc, rpd)
         track_abnormality_rank_in_list_print(ioc, rpd)
+    else
+        text = func_name == "" ? string(f) : func_name
+        fvalues = f(playlist_data)
+        height = 3
+        track_value = first(f(track_data))
+        plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
     end
     playlist_ranked_print_play(f, ioc, playlist_data, playlist_ref, track_id; func_name)
 end
@@ -372,8 +378,6 @@ function toggle_ids_print(ioc)
     IOContext(stdout, IO_DICT...)
 end
 # TODO: look at histograms_plot, track_rank_in_list_print. Reuse funcs, delete specifics.
-# TODO: Reuse t, but add a menu:
-# typicality, and other funcs like danceability.
-# Reuse current_typicality print.
+
 
 

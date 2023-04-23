@@ -33,6 +33,8 @@ function act_on_keystroke(char)
     ioc = IOContext(stdout, IO_DICT...)
     color_set(ioc)
     c = char[1]
+    print_and_delete(color_set(ioc, :yellow), " Calling..")
+    color_set(ioc)
     if c == 'b' || char == "\e[D"
         player_skip_to_previous()
         # If we call player_get_current_track() right

@@ -132,23 +132,39 @@ end
 """
     plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, track_value, height)
 
-Called from `histograms_plot`
+Called from `histograms_plot`.
+
+# Arguments
+
+- data_for_bins is a vector of values
+- track_value is a value within the limits of data_for_bins to highlight
+   It could be one of the values, and does not affect mean μ and deviation σ.
+- text is what values represent, e.g. "tempo"
 """
 function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, track_value, height)
     # Horizontal histograms look better, but the only way to mark the current track's value would
     # be to pick the correct bin and change the bin's color, e.g. through p.graphics.color.
     # A parameter, 'name', can also be given but does not show (without fooling around with margins at least)
     samples = length(data_for_bins)
-    nbins = max(5, Int(round(samples / 23)))
-    width = Int(round(nbins * 40 / 25))
-    ylabel = lpad("$text: $(round(track_value; digits = 3))", 24) 
-    p = histogram(data_for_bins, nbins = nbins, ylabel = ylabel,
+    nbins = UnicodePlots.sturges(samples)
+    width = max(25, Int(round(nbins * 40 / 25)))
+    s_track_value = string(round(track_value; digits = 3))
+    title_with_format_characters = "~Distribution of §$(text)~ with highlighted track value of §$(s_track_value)"
+    title = characters_to_ansi_escape_sequence(title_with_format_characters)
+    p = histogram(data_for_bins, nbins = nbins, title = title,
         height = height, width = width, 
-        color = :red, stats = false, labels=true, border =:none, vertical = true)
+        color = :red, stats = true, labels=true, border =:none, vertical = true)
+    # Use the 'xlabel' to mark the current track's value to show how typical it is of this playlist values.
+    mi = minimum(data_for_bins)
+    ma = maximum(data_for_bins)
+    rel_track_value = (track_value - mi) / (ma - mi)
+    wi = UnicodePlots.ncols(p.graphics)
+    # Column number corresponding to track_value
+    c = max(1, Int(ceil(wi * rel_track_value)))
+    s = rpad(s_track_value, 8)
+    xlabel = rpad(repeat(' ', c - 1 ) * "↑ " * s, wi)
+    p.xlabel[] = xlabel
 
-    # Mark the current track's value to show how typical it is of this playlist.
-    # Note this does not always align well with bin values. Some tweaks could be made.
-    vline!(p, track_value)
     μ = mean(data_for_bins)
     σ = std(data_for_bins, corrected = true)
     # Coefficient of variation
@@ -491,7 +507,8 @@ function characters_to_ansi_escape_sequence(s)
         "+" => "$n+",
         "(" => "$n(",
         ")" => "$n)",
-        "~" => "$n$l")
+        "~" => "$n$l",
+        "§" => n)
     s *= n
 end
 
@@ -513,4 +530,15 @@ function color_set(ioc::IO)
   col = get(ioc, :context_color, :normal)
   print(ioc, text_colors[col])
   ioc
+end
+
+
+# Experimental. Fast feedback to show that something is happening (while precompiling)
+function print_and_delete(ioc, s)
+    n = length(s)
+    print(ioc, s)
+    sleep(0.3)
+    REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
+    print(ioc, repeat(' ', n))
+    REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
 end
