@@ -1,5 +1,8 @@
-# This file has the functions called from the repl-mode.
-# They do something, then returns a string with feedback.
+# This file has the functions called directly from the repl-mode.
+# After some context checking, most work is done by sub-callees.
+# Just a few of these have something interesting to return, like
+# e.g. what was selected. Output is to the REPL, to the Spotify 
+# player, and to the local dataframe.
 
 """
     current_playing_print() ---> Bool
@@ -204,7 +207,7 @@ julia> playtracks(x) = begin;Player.player_resume_playback(;uris = x);println(le
 
 (`playtracks` is already defined and exported by this module.)
 
-# Example
+# Examples
 
 Seek for " love " in the Tracks DataFrame TDF[] and play all results.
 
@@ -212,6 +215,45 @@ Seek for " love " in the Tracks DataFrame TDF[] and play all results.
 julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
 12
 ```
+
+Is the rhythm as inspected with `r : rhythm test` really coorect? Get the trackid by `i : toggle ids`. And then
+dive deeper:
+
+```
+julia> # press :
+julia> 
+e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
+del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
+i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
+Sort then select  t : by typicality.  o : other features.  ↑ : previous selection.
+  Heavenly Shower \ Look To Your Own Heart \ Lisa Ekdahl
+ ◍ >i Including ids from now on
+  Heavenly Shower \ Look To Your Own Heart \ Lisa Ekdahl  spotify:track:2GAVI4dLjAapIyJekbZb2L
+julia> track = "spotify:track:2GAVI4dLjAapIyJekbZb2L"
+julia> json = ReplSpotifyPlayer.tracks_get_audio_analysis(track)[1]
+JSON3.Object{Base.CodeUnits{UInt8, String}, Vector{UInt64}} with 7 entries:
+  :meta     => {…
+  :track    => {…
+  :bars     => Object[{…
+  :beats    => Object[{…
+  :sections => Object[{…
+  :segments => Object[{…
+  :tatums   => Object[{…
+
+julia> begin
+        playtracks([track])
+        bpb = 3
+        for item in json.bars
+            print("|")
+            for beat in 1:bpb
+                sleep(item.duration / bpb)
+                print(".")
+            end
+        end
+    end
+```
+
+
 """
     show(ioc, MIME("text/plain"),mymd)
     println(ioc)
@@ -285,16 +327,6 @@ end
 
 
 """
-    sort_playlist_typicality_select_print(ioc)  ---> Bool
-
-Compares current track with current context,
-i.e. selected audio features compared to 
-playlist or album values.
-"""
-sort_playlist_typicality_select_print(ioc) = current_playlist_ranked_select_print(abnormality, ioc)
-
-
-"""
     current_playlist_ranked_select_print(f, ioc)
 
    `f` is a function that takes the argument playlist_tracks_data::DataFrame
@@ -341,27 +373,44 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "")
     playlist_ranked_print_play(f, ioc, playlist_data, playlist_ref, track_id; func_name)
 end
 
-function sort_playlist_other_select_print(ioc)
-    # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
-    println(ioc, "Track feature select")
-    vs = wanted_feature_keys()
-    rng = 1:length(wanted_feature_keys())
-    for (i, s) in enumerate(vs)
-        println("  ", lpad(i, 3), "  ", s)
+"""
+    sort_playlist_other_select_print(ioc; pre_selection = nothing)
+
+1. Pick criterion function.
+2. Plot distribution of criterion(tracks), with the current track highlighted.
+3. Sort tracks in current playlist by criterion function, with the current track highlighted.
+4. Offer numerical selection from sorted list to play from.
+"""
+function sort_playlist_other_select_print(ioc; pre_selection = nothing)
+    if isnothing(pre_selection)
+        # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
+        println(ioc, "Track feature select")
+        vs = wanted_feature_keys()
+        rng = 1:length(wanted_feature_keys())
+        for (i, s) in enumerate(vs)
+            println("  ", lpad(i, 3), "  ", s)
+        end
+        io = color_set(ioc, :176)
+        print(io, "Type feature number ∈ $rng to sort playlist by! Press enter to do nothing: ")
+        inpno = read_number_from_keyboard(rng)
+        println(io)
+        color_set(ioc)
+        isnothing(inpno) && return nothing
+        picked_key = vs[inpno]
+    else 
+        picked_key = pre_selection
     end
-    io = color_set(ioc, :176)
-    print(io, "Type feature number ∈ $rng to sort playlist by! Press enter to do nothing: ")
-    inpno = read_number_from_keyboard(rng)
-    println(io)
-    color_set(ioc)
-    isnothing(inpno) && return nothing
-    picked_key = vs[inpno]
-    # Capture picked_key in this function that we pass on:
-    function f(playlist_tracks_data)
-        tr_af = playlist_tracks_data[!, picked_key]
-        collect(tr_af)
+    if picked_key != :abnormality
+        # Capture picked_key in this function that we pass on:
+        function f(playlist_tracks_data)
+            tr_af = playlist_tracks_data[!, picked_key]
+            collect(tr_af)
+        end
+        current_playlist_ranked_select_print(f, ioc; func_name = "$(picked_key)")
+    else
+        current_playlist_ranked_select_print(abnormality, ioc)
     end
-    current_playlist_ranked_select_print(f, ioc; func_name = "$(picked_key)")
+    picked_key
 end
 
 housekeeping_clones_print(ioc) = housekeeping_clones_print(ioc, tracks_data_update())
@@ -377,7 +426,26 @@ function toggle_ids_print(ioc)
     end
     IOContext(stdout, IO_DICT...)
 end
-# TODO: look at histograms_plot, track_rank_in_list_print. Reuse funcs, delete specifics.
+
+"""
+    current_genres_print() ---> Bool
+
+Please wait 1 second after changes for correct info.
+"""
+function current_genres_print(ioc)
+    # Ref. delay https://github.com/spotify/web-api/issues/821#issuecomment-381423071
+    st = get_player_state(ioc)
+    isempty(st) && return false
+    if ! isnothing(st.item)
+        genres_print(ioc, st.item)
+    elseif st.currently_genres_type == "unknown"
+        print(ioc, "Currently playing type: unknown")
+    else
+        print(ioc, "Currently playing type: $(st.currently_playing_type)")
+    end
+    println(ioc)
+    true
+end
 
 
 

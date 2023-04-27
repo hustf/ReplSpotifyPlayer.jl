@@ -18,6 +18,38 @@ function track_album_artists_print(ioc, item::JSON3.Object)
     nothing
 end
 
+"track_album_artists_print(ioc, item::JSON3.Object)"
+function genres_print(ioc, item::JSON3.Object)
+    ars = item.artists
+    # Albums only have empty genres fields (2023).
+    for ar in ars
+        artist_id = SpArtistId(ar.id)
+        artobj = Artists.artist_get(artist_id)[1]
+        gen = artobj.genres
+        if !isempty(gen)
+            print(ioc, "  ", ar.name)
+            if get(ioc, :print_ids, false)
+                print(ioc, "  ")
+                show(ioc, MIME("text/plain"), artist_id)
+                color_set(ioc)
+            end
+            for g in gen
+                print(ioc, " ")
+                io = color_set(ioc, :reverse)
+                print(io, g)
+                print(io, text_colors[:normal])
+                color_set(ioc)
+            end
+        else
+            print(color_set(ioc, :red), " Genres unknown for this artist")
+        end
+        println(ioc)
+    end
+    nothing
+end
+
+
+
 "track_in_playlists_print(ioc, track_id) ---> Bool"
 function track_in_playlists_print(ioc, track_id)
     track_also_in_playlists_print(ioc, track_id, JSON3.Object())
@@ -154,17 +186,25 @@ function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, t
     p = histogram(data_for_bins, nbins = nbins, title = title,
         height = height, width = width, 
         color = :red, stats = true, labels=true, border =:none, vertical = true)
+    #
     # Use the 'xlabel' to mark the current track's value to show how typical it is of this playlist values.
+    #
     mi = minimum(data_for_bins)
     ma = maximum(data_for_bins)
-    rel_track_value = (track_value - mi) / (ma - mi)
+    if ma == mi
+        rel_track_value = 0.5
+    else
+        rel_track_value = (track_value - mi) / (ma - mi)
+    end
     wi = UnicodePlots.ncols(p.graphics)
     # Column number corresponding to track_value
     c = max(1, Int(ceil(wi * rel_track_value)))
     s = rpad(s_track_value, 8)
     xlabel = rpad(repeat(' ', c - 1 ) * "↑ " * s, wi)
     p.xlabel[] = xlabel
-
+    #
+    # Show mean and sample standard deviation 
+    #
     μ = mean(data_for_bins)
     σ = std(data_for_bins, corrected = true)
     # Coefficient of variation
@@ -176,11 +216,14 @@ function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, t
         Δ_per_σ = round(Δ / σ; digits = 2)
     end
     tracktext = "$text = μ"
+    tracktext *= text_colors[:normal]
     if Δ_per_σ  < 0
-        tracktext *= " - $(-Δ_per_σ)σ"
+        tracktext *= " - $(-Δ_per_σ)"
     else
-        tracktext *= " + $(Δ_per_σ)σ"
+        tracktext *= " + $(Δ_per_σ)"
     end
+    tracktext *= text_colors[:light_black]
+    tracktext *= "σ"
     push!(p.labels_right, 1  => tracktext)
     push!(p.labels_right, 2 => lpad("μ = $(round(μ, digits = 2))", length(tracktext)))
     push!(p.labels_right, 3 => lpad("σ = $(round(σ, digits = 2))", length(tracktext)))
@@ -216,7 +259,7 @@ function track_abnormality_rank_in_list_print(ioc, rpd)
         abnorm = euclidean_normalized_sample_deviation(alldata, track_index)
         push!(abnormalities, abnorm)
     end
-    sort!(abnormalities)
+    sort!(abnormalities, rev = true)
     ordinal = findfirst(==(abnormality), abnormalities)
     @assert ! isnothing(ordinal)
     print(io, repeat(' ', length(rpd.track_name)))
@@ -226,7 +269,7 @@ function track_abnormality_rank_in_list_print(ioc, rpd)
     print(io, " place of ")
     printstyled(io, length(abnormalities))
     color_set(io)
-    println(" ranked from most to least typical.")
+    println(" ranked from most to least abnormal.")
     color_set(ioc)
     ordinal
 end
@@ -287,7 +330,7 @@ function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, play
     track_names = playlist_tracks_data[!,:trackname]
     fvalues = f(playlist_tracks_data)
     playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
-    print(color_set(ioc, :light_black), " sorted increasing by ")
+    print(color_set(ioc, :light_black), " sorted decreasing by ")
     color_set(ioc, :white)
     if func_name == ""
         print(ioc, f)
@@ -296,7 +339,7 @@ function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, play
     end
     color_set(ioc)
     println(ioc, ":")
-    sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_values(track_ids, track_names, fvalues)
+    sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_decreasing_values(track_ids, track_names, fvalues)
     playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id)
     select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_names)
 end
@@ -320,9 +363,9 @@ function abnormality(playlist_tracks_data::DataFrame)
     end
     abnormalities
 end
-function sort_playlist_by_values(track_ids, track_names, values)
+function sort_playlist_by_decreasing_values(track_ids, track_names, values)
     @assert length(track_ids) == length(track_names) == length(values)
-    perm = sortperm(values)
+    perm = sortperm(values, rev = true)
     return track_ids[perm], track_names[perm], values[perm]
 end
 function playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names, sorted_values, emphasize_track_id)
@@ -397,6 +440,9 @@ are processed by REPL as usual.
 function read_number_from_keyboard(rng)
     remaining_digits = length(string(maximum(rng)))
     buf = ""
+    print(stdout, repeat('_', remaining_digits))
+    REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), remaining_digits)
+
     while remaining_digits >= minimum(rng)
         remaining_digits -= 1
         c = Char(first(read(stdin, 1)))
@@ -413,7 +459,6 @@ end
 
 function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
     io = color_set(ioc, :176)
-    # TODO emphasize in the same way as in replmode....
     uinp = 'p'
     count = 0
     while uinp == 'p' && count < 3
@@ -423,23 +468,8 @@ function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
         println(io)
         if uinp == 'p'
             context_uri = playlist_ref.id
-#            offset = Dict("uri" => track_id)  # FIX BUG:
-#= Bad:           (probably not avaiable wordwide / in the US.)                                                                                                                                                                                                                                                                                        
-       You picked:   Sorgsen ton  spotify:track:6bysGFOuiYR752CKDUldYm from 107-108spm  spotify:playlist:0bkPv8j98ijcrYJDyqrTLG                                                                                                                                                                                 
-       context_uri = 0bkPv8j98ijcrYJDyqrTLG                                                                                                                                                                                                                                                                     
-       offset = Dict{String, SpTrackId}("uri" => 6bysGFOuiYR752CKDUldYm)                                                                                                                                                                                                                                        
-       =#
- #= Good:
-       You picked:   Soul Killing  spotify:track:4CXVVMPsSGvhZjbp4s9k0S from 107-108spm  spotify:playlist:0bkPv8j98ijcrYJDyqrTLG
-       context_uri = 0bkPv8j98ijcrYJDyqrTLG
-       offset = Dict{String, SpTrackId}("uri" => 4CXVVMPsSGvhZjbp4s9k0S)
-       =#
-
-            offset = Dict("uri" => track_id, "market" => "NO")  # TODO FIX! Maybe retrieve the track (without market argument) if failed. Put in separate function.
+            offset = Dict("uri" => track_id, "market" => "NO")  
             response = player_resume_playback(;context_uri, offset)
-            @show response[2]
-            @show response[1]
-
             print(ioc, "\n  ")
             sleep(1)
             current_playing_print(ioc)
@@ -533,11 +563,18 @@ function color_set(ioc::IO)
 end
 
 
-# Experimental. Fast feedback to show that something is happening (while precompiling)
-function print_and_delete(ioc, s)
-    n = length(s)
-    print(ioc, s)
-    sleep(0.3)
+"""
+    print_and_delete(ioc, str; duration_s = 0.2)
+
+Display str for duration_s seconds.
+
+Fast feedback to show that something is happening. Unfortunately
+will wait for compilation delays, which we should get rid of.
+"""
+function print_and_delete(ioc, str, duration_s = 0.2)
+    n = length(str)
+    print(ioc, str)
+    sleep(duration_s)
     REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
     print(ioc, repeat(' ', n))
     REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)

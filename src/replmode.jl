@@ -1,32 +1,50 @@
 # We define a custom REPL-mode in order to avoid pressing Return
 # after every keypress. `read(stdin, 1)` just won't do.
 #
-# We'll make a new REPL interface mode for this,
+# We make a new REPL interface mode for this,
 # based off the shell prompt (shell mode would
 # be entered by pressing ; at the julia> prompt).
 #
-# Method based on 
+# Method strongly inspired by 
 # https://erik-engheim.medium.com/exploring-julia-repl-internals-6b19667a7a62
 
-# We're going to wrap mini mode commands in this.
-# Shortcuts are defined in keymap_dict, but
-# what it then does is specificed in `wrap_command`.
+# Each menu selection calls a function in 'repl_player.jl'.
+# Options are passed down through an IOContext.
 
-# TODO: o for output the last result. Perhaps use 'write(stdin.buffer, 'appears on the prompt')'
-# where the "last result" is an updated global container. 
-# TODO: key for moving to an owned playlist, select from list and remember the last choice.
 
+"""
+This function wraps mini mode commands in this.
+This function is called if a keypress corresponds to
+the definitions in define_single_keystrokes!
+"""
 function wrap_command(state::REPL.LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     # This buffer contain other characters typed so far.
     iobuffer = LineEdit.buffer(state)
     # write character typed into line buffer
     LineEdit.edit_insert(iobuffer, char)
-    # change color of recognized character.
-    printstyled(stdout, char, color = :green)
+    # Print recognized character in color.
+    # Replace arrow control codes with unicode.
+    if char == "\e[A"
+        printstyled(stdout, '↑' , color = :green)
+    elseif char == "\e[B"
+        printstyled(stdout, '↓' , color = :green)
+    elseif char == "\e[C"
+        printstyled(stdout, '→' , color = :green)
+    elseif char == "\e[D"
+        printstyled(stdout, '←' , color = :green)
+    else
+        printstyled(stdout, char, color = :green)
+    end
     act_on_keystroke(char)
 end
 
+"An io context is made based on this at each recognized keystroke"
 const IO_DICT = Dict(:context_color => :green, :print_ids => false, :silent => false)
+
+"Remember last selection for single keystroke access later"
+const PREVIOUS_FEATURE_SELECTION = Ref{Union{Symbol, Nothing}}(nothing)
+
+"Call the functiion selected by keystroke with an IOContext. Then print current state."
 function act_on_keystroke(char)
     # Most calls from here on
     # will print something. 
@@ -82,30 +100,35 @@ function act_on_keystroke(char)
         color_set(ioc)
     elseif c == 't'
         io = color_set(ioc, :normal)
-        sort_playlist_typicality_select_print(io)
+        PREVIOUS_FEATURE_SELECTION[]  = sort_playlist_other_select_print(io; pre_selection = :abnormality)
         color_set(ioc)
     elseif c == 'o'
         io = color_set(ioc, :normal)
-        sort_playlist_other_select_print(io)
+        PREVIOUS_FEATURE_SELECTION[] = sort_playlist_other_select_print(io)
         color_set(ioc)
     elseif c == 'h'
         io = color_set(ioc, :green)
         housekeeping_clones_print(io)
         color_set(ioc)
+    elseif char == "\e[A" # up arrow
+        io = color_set(ioc, :normal)
+        PREVIOUS_FEATURE_SELECTION[] = sort_playlist_other_select_print(io; pre_selection = PREVIOUS_FEATURE_SELECTION[])
+        color_set(ioc)
+    elseif c == 'g'
+        io = color_set(ioc, :green)
+        current_genres_print(io)
+        color_set(ioc)
     end
-    # After the command, a line with the current state:
+    # After the command, a line with the current playing:
     print(ioc, "  ")
     current_playing_print(ioc)
     color_set(ioc)
     nothing
 end
 
-
-
-
-
-# Respond to pressing enter when in mini player mode
+"Respond to pressing enter when in mini player mode"
 on_non_empty_enter(s) = print_menu_and_current_playing()
+
 
 function print_menu_and_current_playing()
     print_menu()
@@ -116,9 +139,11 @@ function print_menu_and_current_playing()
     nothing
 end
 
-# To enter this new repl mode 'minimode', user must be at start of line, just as with the other
-# interface modes.
-# Printed output is what you get when pressing 'enter' afterwards.
+"""
+To enter this new repl mode 'minimode', user must be at start of line, just as with the other
+interface modes.
+Printed output is what you get when pressing 'enter' afterwards.
+"""
 function triggermini(state::LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     iobuffer = LineEdit.buffer(state)
     if position(iobuffer) == 0
@@ -141,6 +166,7 @@ end
 
 function exit_mini_to_julia_prompt(state::LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     # Other mode changes require start of line. We want immediate exit.
+    PREVIOUS_FEATURE_SELECTION[] = nothing
     iobuffer = LineEdit.buffer(state)
     LineEdit.transition(state, repl.interface.modes[1]) do
         # Type of LineEdit.PromptState
@@ -149,7 +175,7 @@ function exit_mini_to_julia_prompt(state::LineEdit.MIState, repl::LineEditREPL, 
     end
 end
 
-# We assume there are six default prompt modes, like in Julia 1.0-1.8 at least.
+"We assume there are six default prompt modes, like in Julia 1.0-1.8 at least."
 function add_seventh_prompt_mode(repl::LineEditREPL)
     freshprompt = REPL.Prompt(" ◍ >")
     # Copy every property of the shell mode to freshprompt
@@ -188,9 +214,6 @@ function add_seventh_prompt_mode(repl::LineEditREPL)
     freshprompt
 end
 
-
-
-
 function define_single_keystrokes!(special_prompt)
     # Single keystroke commands. Sorry for any ugliness.
     # Take care to check; some keys won't work.
@@ -208,6 +231,7 @@ function define_single_keystrokes!(special_prompt)
         d['t'] = wrap_command
         d['h'] = wrap_command
         d['o'] = wrap_command
+        d['g'] = wrap_command
         d['0'] = wrap_command
         d['1'] = wrap_command
         d['2'] = wrap_command
@@ -221,8 +245,9 @@ function define_single_keystrokes!(special_prompt)
         # The structure is nested for special keystrokes.
         special_dict = special_prompt.keymap_dict['\e']
         very_special_dict = special_dict['[']
-        very_special_dict['C'] = wrap_command
-        very_special_dict['D'] = wrap_command
+        very_special_dict['A'] = wrap_command # up arrow 
+        very_special_dict['C'] = wrap_command # right arrow
+        very_special_dict['D'] = wrap_command # left arrow
         deletedict = very_special_dict['3']
         deletedict['~'] =  wrap_command
     end
@@ -232,9 +257,9 @@ end
 function print_menu()
     menu = """
     ¨e : exit.     ¨f(¨→) : forward.     ¨b(¨←) : back.     ¨p: pause, play.     ¨0-9:  seek.
-    ¨del(¨fn + ¨⌫  ) : delete track from playlist.       ¨c : context.       ¨m : musician.
+    ¨del(¨fn + ¨⌫  ) : delete track from playlist. ¨c : context. ¨m : musician. ¨g : genres.
     ¨i : toggle ids. ¨r : rhythm test. ¨a : audio features. ¨h : housekeeping. ¨? : syntax.
-          Sort playlist, then select        ¨t : by typicality.     ¨o : other features.
+    ~Sort then select § ¨t : by typicality.  ¨o : other features.  ¨↑ : previous selection.
     """
     print(stdout, characters_to_ansi_escape_sequence(menu))
 end

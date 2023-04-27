@@ -210,7 +210,7 @@ function tracks_data_append_audio_features!(tracks_data; silent = true)
             if ! silent
                 REPL.Terminals.clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
                 print(stdout, "   ", round(i / nr; digits = 2))
-                sleep(0.002)
+                sleep(0.001)
             end
         end
     end
