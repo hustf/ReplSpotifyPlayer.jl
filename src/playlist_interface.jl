@@ -1,5 +1,5 @@
 # This file wraps functions from Spotify.jl.
-# Used by tracks_dataframe_functions.jl
+# Used by tracks_dataframe.jl
 # Some of these wrappers translate into ReplSpotifyPlayer types and DataFrame.
 
 # Some are based on Spotify.jl/example/

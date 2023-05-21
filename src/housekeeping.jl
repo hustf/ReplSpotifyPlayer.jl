@@ -167,7 +167,6 @@ function make_single_replacement_with_permission_print(ioc, user_input, du::Data
     if du.albumtype == dv.albumtype
         print(color_set(ioc, :light_black), "\n\tThe current track's available markets is ")
         show(IOContext(color_set(ioc, :green), :limit => true), du.available_markets)
-        #print(color_set(ioc, :green), du.available_markets)
         if dv.available_markets == String[]
             print(color_set(ioc, :light_black), "\n\t\t while the replacement is unlimited.")
         else

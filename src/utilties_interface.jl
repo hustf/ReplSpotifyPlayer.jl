@@ -1,6 +1,6 @@
 # This file contains functions used internally by repl_player.jl (the user-facing functions).
 # These are second-tier, not called directly by keypresses, rather indirect.
-# They do not fit neatly in player_interface_functions or playlist_interface_functions.
+# They do not fit neatly in player_interface or playlist_interface.
 # They are not supposed to be interesting to call from without the special replmode.
 
 "track_album_artists_print(ioc, item::JSON3.Object)"
