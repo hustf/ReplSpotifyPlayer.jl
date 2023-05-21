@@ -5,7 +5,7 @@
 # based off the shell prompt (shell mode would
 # be entered by pressing ; at the julia> prompt).
 #
-# Method strongly inspired by 
+# Method strongly inspired by
 # https://erik-engheim.medium.com/exploring-julia-repl-internals-6b19667a7a62
 
 # Each menu selection calls a function in 'repl_player.jl'.
@@ -44,15 +44,18 @@ const IO_DICT = Dict(:context_color => :green, :print_ids => false, :silent => f
 "Remember last selection for single keystroke access later"
 const PREVIOUS_FEATURE_SELECTION = Ref{Union{Symbol, Nothing}}(nothing)
 
-"Call the functiion selected by keystroke with an IOContext. Then print current state."
+"Call the function selected by keystroke with an IOContext. Then print current state."
 function act_on_keystroke(char)
     # Most calls from here on
-    # will print something. 
+    # will print something.
     ioc = IOContext(stdout, IO_DICT...)
     color_set(ioc)
     c = char[1]
     print_and_delete(color_set(ioc, :yellow), " Calling..")
     color_set(ioc)
+    if ! Spotify.credentials_still_valid()
+        println(ioc, "DEBUG: We believe you will have problems, credentials are expired.")
+    end
     if c == 'b' || char == "\e[D"
         player_skip_to_previous()
         # If we call player_get_current_track() right
@@ -108,7 +111,7 @@ function act_on_keystroke(char)
         color_set(ioc)
     elseif c == 'h'
         io = color_set(ioc, :green)
-        housekeeping_clones_print(io)
+        housekeeping_print(io)
         color_set(ioc)
     elseif char == "\e[A" # up arrow
         io = color_set(ioc, :normal)
@@ -193,7 +196,8 @@ function add_seventh_prompt_mode(repl::LineEditREPL)
             # The default keymap is fine, though it misses a mode exit.
             # We add this important one here, at once.
             # Other keys are added after this.
-            freshprompt.keymap_dict['e'] = exit_mini_to_julia_prompt
+            freshprompt.keymap_dict['e'] = exit_mini_to_julia_prompt  # 'e' key exits
+            freshprompt.keymap_dict['\b'] = exit_mini_to_julia_prompt # backspace exits. TODO test on Mac.
         else
             setfield!(freshprompt, name, getfield(shellprompt, name))
         end
@@ -207,7 +211,7 @@ function add_seventh_prompt_mode(repl::LineEditREPL)
         repl.interface.modes[7] = freshprompt
     end
 
-    # Modify juliamode to trigger mode transition to minimode 
+    # Modify juliamode to trigger mode transition to minimode
     # when a ':' is written at the beginning of a line
     juliamode = repl.interface.modes[1]
     juliamode.keymap_dict[':'] = triggermini
@@ -245,7 +249,7 @@ function define_single_keystrokes!(special_prompt)
         # The structure is nested for special keystrokes.
         special_dict = special_prompt.keymap_dict['\e']
         very_special_dict = special_dict['[']
-        very_special_dict['A'] = wrap_command # up arrow 
+        very_special_dict['A'] = wrap_command # up arrow
         very_special_dict['C'] = wrap_command # right arrow
         very_special_dict['D'] = wrap_command # left arrow
         deletedict = very_special_dict['3']

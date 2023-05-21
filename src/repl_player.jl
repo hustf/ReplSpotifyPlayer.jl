@@ -1,13 +1,13 @@
 # This file has the functions called directly from the repl-mode.
 # After some context checking, most work is done by sub-callees.
 # Just a few of these have something interesting to return, like
-# e.g. what was selected. Output is to the REPL, to the Spotify 
+# e.g. what was selected. Output is to the REPL, to the Spotify
 # player, and to the local dataframe.
 
 """
     current_playing_print() ---> Bool
 
-Please wait 1 second after changes for correct info.
+This is called after every command in the player replmode.
 """
 function current_playing_print(ioc)
     # Ref. delay https://github.com/spotify/web-api/issues/821#issuecomment-381423071
@@ -30,6 +30,8 @@ end
 Shows the playlist name or Library. Also where else the current track appears.
 
 Please wait 1 second after changes for correct info.
+
+key: 'c'
 """
 function current_context_print(ioc)
     st = get_player_state(ioc)
@@ -56,7 +58,7 @@ function current_context_print(ioc)
         else
             throw("Didn't think of $(string(type))")
         end
-        # 
+        #
         # Also check if we have played past the end of the playlist and continued into the 'recommendations'.
         if st.context.type == "collection"
             if ! is_track_in_library(track_id)
@@ -65,8 +67,8 @@ function current_context_print(ioc)
         elseif st.context.type == "playlist"
             playlist_id = SpPlaylistId(st.context.uri)
             # We don't know if this playlist is owned by user yet.
-            # If `is_track_in_track_data` returns false, we can avoid the web API call in `is_track_in_playlist`. 
-            if ! (is_track_in_track_data(track_id, playlist_id) || is_track_in_playlist(track_id, playlist_id))
+            # If `is_track_in_local_data` returns true, we can avoid the web API call in `is_track_in_online_playlist`.
+            if ! (is_track_in_local_data(track_id, playlist_id) || is_track_in_online_playlist(track_id, playlist_id))
                 print(ioc, " Past end, in 'recommendations'")
             end
         end
@@ -99,6 +101,8 @@ end
     delete_current_playing_from_owned_print(ioc) ---> Bool
 
 Delete track from playlist or library context, if owned.
+
+key: 'delete' or 'fn + ⌫ '
 """
 function delete_current_playing_from_owned_print(ioc)
     st = get_player_state(ioc)
@@ -122,7 +126,11 @@ function delete_current_playing_from_owned_print(ioc)
     delete_track_from_playlist_print(ioc, track_id, playlist_id, st.item)
 end
 
-"pause_unpause_print(ioc) ---> Bool"
+"""
+pause_unpause_print(ioc) ---> Bool
+
+key: 'p'
+"""
 function pause_unpause_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
@@ -139,6 +147,8 @@ end
     current_audio_features_print(ioc)  ---> Bool
 
 Audio features in two columns.
+
+key: 'a'
 """
 function current_audio_features_print(ioc)
     st = get_player_state(ioc)
@@ -170,6 +180,8 @@ end
    seek_in_track_print(ioc, decileioc)   ---> Bool
 
 Resume playing from decile 0-9 in current track, where 1 is 1 / 10 of track length.
+
+'0' <= key <= '9'
 """
 function seek_in_track_print(ioc, decile)
     st = get_player_state(ioc)
@@ -183,8 +195,8 @@ function seek_in_track_print(ioc, decile)
     t = st.item.duration_ms
     new_progress_ms = Int(round(decile * t / 10))
     player_seek(new_progress_ms)
-    ns = Int(round(new_progress_ms / 1000))
-    ts = Int(round(t / 1000))
+    ns = duration_sec(new_progress_ms)
+    ts = duration_sec(t)
     println(ioc, "$(ns) s / $(ts) s")
     true
 end
@@ -193,11 +205,13 @@ end
     help_seek_syntax_print(ioc) ---> Bool
 
 Some suggestions for using the DataFrame syntax with Spotify.jl and this package.
+
+key: '?'
 """
 function help_seek_syntax_print(ioc)
     mymd = md"""
 
-Exit the replmode by pressing 'e'. 
+Exit the replmode by pressing 'e'.
 
 ## Save typing with shorthand single-argument functions:
 
@@ -221,7 +235,7 @@ dive deeper:
 
 ```
 julia> # press :
-julia> 
+julia>
 e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
 del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
 i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
@@ -262,6 +276,8 @@ end
 
 """
     current_artist_and_tracks_in_data_print(ioc)
+
+key: 'm'
 """
 function current_artist_and_tracks_in_data_print(ioc)
     st = get_player_state(ioc)
@@ -280,6 +296,8 @@ end
     current_metronome_print(ioc)  ---> Bool
 
 Shows a beat / bar counter asyncronously until the end of track.
+
+key: 'r'
 """
 function current_metronome_print(ioc)
     st = get_player_state(ioc)
@@ -296,8 +314,8 @@ function current_metronome_print(ioc)
     isempty(af) && return false
     bpm = af[:tempo]
     bpb = Int(af[:time_signature])
-    duration_s = af[:duration_ms]  / 1000
-    position_s = get_player_state(ioc).progress_ms / 1000
+    duration_s = duration_sec(af[:duration_ms])
+    position_s = duration_sec(get_player_state(ioc).progress_ms)
     bars_per_minute = bpm / bpb
     bars_in_track = Int(round(duration_s * bars_per_minute / 60 ))
     current_bar = Int(round(position_s * bars_per_minute / 60)) + 1
@@ -318,7 +336,7 @@ function current_metronome_print(ioc)
     sleep(1 / (bpm / 60) * bpb)
     # Wait for a key to stop metronome
     read(stdin, 1)
-    if isopen(stop_channel) 
+    if isopen(stop_channel)
         put!(stop_channel, 1)
     end
     println(ioc)
@@ -354,7 +372,11 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "")
     track_data = subset(playlist_data, :trackid => ByRow(==(track_id)))
     if isempty(track_data)
         io = color_set(ioc, :red)
-        println(io, "Past end of playlist, in 'recommendations'.")
+        if nrow(playlist_data) > 99
+            println(io, "This playlist has > 100 tracks. Retrieving current track data not implemented.")
+        else
+            println(io, "Past end of playlist, in 'recommendations'.")
+        end
         color_set(ioc)
         return false
     end
@@ -365,7 +387,7 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "")
         track_abnormality_rank_in_list_print(ioc, rpd)
     else
         text = func_name == "" ? string(f) : func_name
-        fvalues = f(playlist_data)
+        fvalues = Number.(f(playlist_data))
         height = 3
         track_value = first(f(track_data))
         plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
@@ -380,6 +402,8 @@ end
 2. Plot distribution of criterion(tracks), with the current track highlighted.
 3. Sort tracks in current playlist by criterion function, with the current track highlighted.
 4. Offer numerical selection from sorted list to play from.
+
+key: 'o' or 't'
 """
 function sort_playlist_other_select_print(ioc; pre_selection = nothing)
     if isnothing(pre_selection)
@@ -397,7 +421,7 @@ function sort_playlist_other_select_print(ioc; pre_selection = nothing)
         color_set(ioc)
         isnothing(inpno) && return nothing
         picked_key = vs[inpno]
-    else 
+    else
         picked_key = pre_selection
     end
     if picked_key != :abnormality
@@ -413,9 +437,21 @@ function sort_playlist_other_select_print(ioc; pre_selection = nothing)
     picked_key
 end
 
-housekeeping_clones_print(ioc) = housekeeping_clones_print(ioc, tracks_data_update())
+"""
+    housekeeping_print(ioc)
 
+key: 'h'
+"""
+function housekeeping_print(ioc)
+    println(ioc)
+    housekeeping_print(ioc, tracks_data_update())
+end
 
+"""
+    toggle_ids_print(ioc)
+
+key: 'i'
+"""
 function toggle_ids_print(ioc)
     if get(ioc, :print_ids, false)
         println(ioc, " No ids from now on")
@@ -430,7 +466,7 @@ end
 """
     current_genres_print() ---> Bool
 
-Please wait 1 second after changes for correct info.
+key: 'g'
 """
 function current_genres_print(ioc)
     # Ref. delay https://github.com/spotify/web-api/issues/821#issuecomment-381423071
@@ -446,6 +482,3 @@ function current_genres_print(ioc)
     println(ioc)
     true
 end
-
-
-

@@ -5,23 +5,22 @@
     artist_details_print(ioc, uri::String) ---> nothing\\
     artist_details_print(ioc, artist_id::SpArtistId) ---> nothing\\
 """
-function artist_details_print(ioc, uri::String)
-    artist_id = SpArtistId(uri)
-    artist_details_print(ioc, artist_id)
-    nothing
-end
+artist_details_print(ioc, uri::String) = artist_details_print(ioc, SpArtistId(uri))
 function artist_details_print(ioc, artist_id)
     o = artist_get(artist_id)[1]
     print(ioc, o.name)
     io = color_set(ioc, :normal)
     print(io, "  followers: ", o.followers.total)
-    print(io, "  genres: ", o.genres)
+    gen = String.(o.genres)
+    if ! isempty(gen)
+        genres_print(io, String.(o.genres))
+    end
     if get(io, :print_ids, false)
         print(io, "  ")
         show(io, MIME("text/plain"), artist_id)
     end
     color_set(ioc)
-    # TODO: consider using images.
+    # We might include images through Sixels.
     nothing
 end
 
@@ -43,29 +42,34 @@ end
 function artist_tracks_in_data_print(ioc, artist_id::SpArtistId)
     artist_tracks_in_data_print(ioc, artist_id, tracks_data_update())
 end
+
 function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
-    silent = get(ioc, :silent, :true)
     color_set(ioc, :light_black)
-    all_track_ids = artist_get_all_tracks(artist_id;  silent)
+    tracks_album_artist_playlists_data = select(tracks_data, :artists, :artist_ids,:trackid, :trackname, :albumtype, :album_name, :isrc, r"playlistref")
+    # One row per artist
+    per_artist_data = flatten(tracks_data, [:artists, :artist_ids])
+    # Drop other artists.
+    df = sort(filter(:artist_ids => ==(artist_id), per_artist_data), :trackname)
+    if nrow(df) == 0
+        println(color_set(ioc, :light_black), "\tArtist has no tracks in your owned playlist.")
+        return nothing
+    end
+    all_track_ids = df[!, :trackid]
     color_set(ioc)
-    all_tracks_df = DataFrame(:trackid => all_track_ids)
-    used_tracks_df = innerjoin(tracks_data, all_tracks_df, on = :trackid)
-    artist_name = artist_get(artist_id)[1].name
+    artist_name = df[1, :artists]
     io = color_set(ioc, :yellow)
     print(io, "\n", artist_name)
     printstyled(io, " has ", color =:light_black)
-    print(io, length(all_track_ids))
-    printstyled(io, " tracks on Spotify. ", color = :light_black)
-    if nrow(used_tracks_df) > 0
-        if nrow(used_tracks_df) == 1
+    if nrow(df) > 0
+        if nrow(df) == 1
             print(io, " One")
             printstyled(io, " track in your playlists: ", color = :light_black)
         else
-            print(io, " ", nrow(used_tracks_df))
-            printstyled(io, " tracks in your tracks data: ", color = :light_black)
+            print(io, " ", nrow(df))
+            printstyled(io, " tracks in your playlists: ", color = :light_black)
         end
-        for dfrw in eachrow(used_tracks_df)
-            color_set(io)
+        for dfrw in eachrow(df)
+            color_set(io, :normal)
             track_id = dfrw[:trackid]
             track_name = dfrw[:trackname]
             print(io, "\n  ", track_name, " ")
@@ -76,204 +80,35 @@ function artist_tracks_in_data_print(ioc, artist_id, tracks_data)
             end
             io_ = color_set(io, :blue)
             playlistrefs = filter(x-> ! ismissing(x), collect(dfrw[r"playlistref"]))
-            if length(playlistrefs) > 0
-                for l in playlistrefs 
-                    if ! ismissing(l)
-                        print(io_, "\n    ")
-                        playlist_no_details_print(io_, l)
-                    end
+            @assert length(playlistrefs) > 0
+            for l in playlistrefs
+                if ! ismissing(l)
+                    print(io_, "\n    ")
+                    playlist_no_details_print(io_, l)
                 end
-                println(io_)
-            else
-                println(io_, "  Found in TDF[], but not currently in a playlist you own. ")
             end
             color_set(io)
         end
     else
-        println(io, "None occur in your playlists.")
+        println(io, "None occur in your playlists. This function needs some testing.")
     end
-    color_set(ioc)
     println(ioc)
-    nothing
+    color_set(ioc)
+    nothing # Consider returning these tracks to a play queue. Pri below rhytm graph.
 end
-
-
-
-
-
-
-
-
-
-
-"""
-    artist_get_all_albums(artist_id; include_groups = "")\\
-    ---> Vector{SpAlbumId},  prints to stdout
-
-# Non-obious parameters
-
-- include_groups : A comma-separated list of keywords that will be used to filter the response.
-    If not supplied, all album types will be returned.
-    Valid values are:
-    * `album` (default)
-    * `single` (default)
-    * `compilation` (default)
-    * `appears_on` (not default)
-
-# Example
-
-```
-julia> artist_id = "spotify:artist:2sf2owtFSCvz2MLfxmNdkb"
-
-julia> artist_get_all_albums(artist_id)
-61-element Vector{Spotify.SpAlbumId}:
- spotify:album:4flAylJfbXX7DVPH7oaS6d
- spotify:album:1leWzxXRfb2h3JZ0tjAt7s
- spotify:album:1oLBDxQlDGNuVvi8QuKKEA
- spotify:album:2CXY5q62zOgU7Ju4rA7FMw
- spotify:album:67SgIr5XQiQg4xYI7zFM4Q
- ⋮
- spotify:album:1WacHRxZ1QHMzRZ2WH96gt
- spotify:album:2Y7nG4LCOytZPetc1mnSC1
- spotify:album:0Dg03V02HduzUmPSOPugW1
- spotify:album:5W3fyI4YPle5wruoB9mBOX
-```
-
-# Examples, default arguments
-
-Here, we press 'l' while the player context is Madonna's most popular tunes:
-
-```
-Material Girl \\ Celebration (double disc version) \\ Madonna  spotify:track:22sLuJYcvZOSoLLRYev1s5\\
-◍ >l  Madonna  followers: 6867714  genres: ["dance pop", "pop"]  spotify:artist:6tbjWDEIzxoDsBA1FuhfPW\\
-Madonna has 1131 tracks on Spotify. None occur in your playlists.\\
-```
-
-
-- I like many Madonna tracks, but now feel confident that none appears in my playlist.
-
-
-## Checking with a wider scope:
-
-By dropping `include_groups`, we get 'appears on' results as well:
-
-```
-julia> artist_get_all_albums("spotify:artist:6tbjWDEIzxoDsBA1FuhfPW", include_groups = "")
-247-element Vector{SpAlbumId}:
-spotify:album:44e7fW0OfNaIyUzIg6mat3
-...
-spotify:album:5QQ66C39N9ysUf1vr0rIzs
-```
-
-The latter scope is too wide a net, when the context is finding tracks from this artist in our playllists.
-"""
-function artist_get_all_albums(artist_id; include_groups = ["album", "single", "compilation"])
-    batchsize = 50
-    country = ""
-    albums = Vector{SpAlbumId}()
-    for batchno = 0:200
-        offset = batchno * batchsize
-        json, waitsec = artist_get_albums(artist_id; limit = batchsize, offset, country , include_groups)
-        isempty(json) && break
-        waitsec > 0 && throw("Too fast, whoa!")
-        l = length(json.items)
-        l == 0 && break
-        for item in json.items
-            album_id = SpAlbumId(item.uri)
-            push!(albums, album_id)
-        end
-    end
-    albums
-end
-
-
-
-
-
-"""
-    artist_get_all_tracks(artist_id; silent = true, country = get_user_country())\\
-    ---> Vector{SpTrackId},  prints to stdout
-
-This gets all track_ids from the web API, whether that occurs in a user playlist or not.
-
-This is intended for use in finding those of an artist's tracks which occur
-in owned playlists (and perhaps user library). Considered too slow for many artists at a time.
-
-# NOTE [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking)
-"
-The availability of a track depends on the country registered in the user’s Spotify profile settings.
-Often Spotify has several instances of a track in its catalogue, each available in a different set of markets.
- This commonly happens when the track the album is on has been released multiple times under different
- licenses in different markets.
-
-These tracks are linked together so that when a user tries to play a track that isn’t available in their own
-market, the Spotify mobile, desktop, and web players try to play another instance of the track that is available
- in the user’s market.
-"
-
-# Example
-```
-julia> artist_id = "spotify:artist:2sf2owtFSCvz2MLfxmNdkb"
-
-julia> @time artist_get_all_tracks(artist_id)
-9.662973 seconds (40.95 k allocations: 10.739 MiB, 0.16% gc time)
-692-element Vector{SpTrackId}:
- spotify:track:4FsVaGWVuYX8TqKQpwZYtd
- spotify:track:6unJkSbcI0I8Ak88IRu35I
- spotify:track:1b8V2JRw0YJiN9jeBWkAPg
- spotify:track:1raugzX28SqqCiRXQQrb4z
- spotify:track:0yox0qriKo0WWUVpoLtK5l
- spotify:track:109R1RqbpPmPCP0OtQLFXz
- spotify:track:5lqhsv5tW76GB3WBL5vh59
- spotify:track:1lH8iTfrXyg2RFNbRT4sgO
- spotify:track:6zLVUIWvIYUsRNMsrhuJ36
- ⋮
- spotify:track:4FyUafYjyC8n0GjkdOkhry
- spotify:track:5y0fsgpF0CICt77CwQkIFA
- spotify:track:1oZYMquWGyr0SGQ8hhjOvj
- spotify:track:6TFINWC5oWjDe4emrxd6H7
- spotify:track:4oaeGnrn91FNRWrAGcegYi
- spotify:track:2YOTbb7xL2I3dOsSiwsypP
- spotify:track:3W9IchAxK6quv4gwWG4fwJ
- spotify:track:3rHXf9TY0SmaJuqHVSl3dc
- spotify:track:0aNBvUgi1V8hI4LwMMhSjV
-
-```
-
-"""
-function artist_get_all_tracks(artist_id; silent = true)
-    tracks_w_duplicates = Vector{SpTrackId}()
-    album_ids = artist_get_all_albums(artist_id)
-    market = ""
-    ! silent && println(stdout, "Retrieving tracks in albums:  ")
-    for album_id in album_ids
-        json, waitsec = album_get_single(album_id; market)
-        waitsec > 0 && throw("Too fast, whoa!")
-        isempty(json) && throw("Error getting album_id $album_id")
-        ! silent && print(stdout, json.name, "  ")
-        for item in json.tracks.items
-            track_id = SpTrackId(item.id)
-            push!(tracks_w_duplicates, track_id)
-        end
-    end
-    ! silent && println(stdout)
-    unique(tracks_w_duplicates)
-end
-
-
-
 
 function artist_and_tracks_in_data_print(ioc, item::JSON3.Object)
     type = item.type
     if type == "track"
-        artist = item.artists[1]
-        artist_id = SpArtistId(artist.uri)
+        artist_ids = [SpArtistId(a.uri) for a in item.artists]
     else
         throw("Didn't think of $(string(type))")
     end
-    artist_and_tracks_in_data_print(ioc, artist_id)
+    artist_and_tracks_in_data_print.(ioc, artist_ids)
 end
+
 function artist_and_tracks_in_data_print(ioc, artist_id)
+    color_set(ioc)
     artist_details_print(ioc, artist_id)
     println(ioc)
     artist_tracks_in_data_print(ioc, artist_id)

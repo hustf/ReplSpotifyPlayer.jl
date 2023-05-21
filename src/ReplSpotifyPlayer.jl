@@ -6,7 +6,7 @@ module ReplSpotifyPlayer
 # Statistics for a playlist in terms of audio features and genres
 
 using REPL
-using REPL.LineEdit 
+using REPL.LineEdit
 using REPL: LineEditREPL
 using Base: @kwdef, text_colors #, active_repl
 using Markdown
@@ -18,9 +18,10 @@ using Spotify
 using Spotify: SpType, get_user_country, credentials_contain_scope
 using Spotify.Player, Spotify.Playlists, Spotify.Tracks, Spotify.Artists, Spotify.Albums, Spotify.Search
 using Statistics
-
+using StatsBase: countmap
 import Spotify.JSON3
 import CSV
+import CSV.InlineStrings
 import Base: tryparse, show
 export Spotify
 export SpId, SpCategoryId, SpPlaylistId, SpAlbumId, SpTrackId
@@ -31,7 +32,7 @@ export Albums
 #, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
 
 export JSON3
-export PlaylistRef, TrackRef, authorize, DataFrame
+export PlaylistRef, authorize, DataFrame
 
 export TDF
 export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snapshot_in_data
@@ -55,30 +56,32 @@ include("artist_interface_functions.jl")
 include("album_interface_functions.jl")
 include("tracks_interface_functions.jl")
 include("utilties_interface_functions.jl")
+include("search_interface_functions.jl")
 include("tracks_dataframe_functions.jl")
 include("tracks_dataframe_lookup_functions.jl")
-include("tracks_dataframe_io.jl")
+include("tracks_dataframe_load_save.jl")
+include("housekeeping_functions.jl")
 include("replmode.jl")
 include("repl_player.jl")
 include("utilties.jl")
 
 function init()
-    repl_player_default_scopes = ["user-read-private", "user-modify-playback-state", "user-read-playback-state", "playlist-modify-private", 
+    repl_player_default_scopes = ["user-read-private", "user-modify-playback-state", "user-read-playback-state", "playlist-modify-private",
         "playlist-read-private", "playlist-read-collaborative", "user-library-read"]
     if ! Spotify.credentials_contain_scope(repl_player_default_scopes)
         apply_and_wait_for_implicit_grant(;scopes = repl_player_default_scopes)
     end
 
-    # This gets the current subscribed playlists, and creates 
+    # This gets the current subscribed playlists, and creates
     # or updates a local tracks data file and in-memory copy:
     tracks_data_update()
-    
-    # Configure miniprompt, then tell Julia about it. 
+
+    # Configure miniprompt, then tell Julia about it.
 
     @assert isdefined(Base, :isinteractive)
     @assert Base.isinteractive()
     @assert isdefined(Base, :active_repl)
-    PLAYERprompt[] = add_seventh_prompt_mode(Base.active_repl) 
+    PLAYERprompt[] = add_seventh_prompt_mode(Base.active_repl)
     define_single_keystrokes!(PLAYERprompt[])
     @info "Type `:` to enter mini player mode, `e` to exit."
 end

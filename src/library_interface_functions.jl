@@ -6,7 +6,7 @@
 
 
 "is_track_in_library(track_id::SpTrackId) ---> Bool"
-is_track_in_library(track_id::SpTrackId) = Spotify.Tracks.tracks_get_contains([track_id])[1][1]
+is_track_in_library(track_id::SpTrackId) = tracks_get_contains([track_id])[1][1]
 
 "delete_track_from_library_print(track_id, , item::JSON3.Object) ---> Bool"
 function delete_track_from_library_print(ioc, track_id, item::JSON3.Object)
@@ -16,7 +16,7 @@ function delete_track_from_library_print(ioc, track_id, item::JSON3.Object)
         track_album_artists_print(io, item)
         println(io, "\" from your library.")
         color_set(ioc)
-        Spotify.Tracks.tracks_remove_from_library([track_id])
+        tracks_remove_from_library([track_id])
         return true
     else
         io = color_set(ioc, :yellow)

@@ -44,22 +44,19 @@ is_other_playlist_snapshot_in_data(playlistref) = is_other_playlist_snapshot_in_
 
 is_track_in_data(trackrefs_rw::DataFrameRow, t::SpTrackId) = ! isempty(trackrefs_rw) && t == trackrefs_rw.trackid
 is_track_in_data(tracks_data::DataFrame, t::SpTrackId) = ! isempty(tracks_data) && t ∈ tracks_data.trackid
-is_track_in_data(track::TrackRef) = is_track_in_data(track.id)
 is_track_in_data(trackid) = is_track_in_data(tracks_data_update(), trackid)
 
 ################################################
 # Functions specific to using, not building data
 ################################################
 """
-    is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId)-> Bool
-    is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_data)-> Bool
+    is_track_in_local_data(t::SpTrackId, playlist_id::SpPlaylistId)-> Bool
+    is_track_in_local_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_data)-> Bool
 """
-function is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId)
-    # TODO: fix either function name or the number of arguments.
-    is_track_in_track_data(t, playlist_id, tracks_data_update())
+function is_track_in_local_data(t::SpTrackId, playlist_id::SpPlaylistId)
+    is_track_in_local_data(t, playlist_id, tracks_data_update())
 end
-function is_track_in_track_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_data)
-    # TODO: Not a good name or argument list!
+function is_track_in_local_data(t::SpTrackId, playlist_id::SpPlaylistId, tracks_data)
     td = subset(tracks_data, :trackid => ByRow(x -> x == t))
     is_playlist_in_data(td, playlist_id)
 end
@@ -80,7 +77,7 @@ end
 
 function tracks_get_stored_or_api_audio_features(track_id)
     tracks_get_stored_or_api_audio_features(track_id, tracks_data_update())
-end    
+end
 function tracks_get_stored_or_api_audio_features(track_id, tracks_data)
     rw = subset(tracks_data, :trackid => ByRow(==(track_id)))
     if nrow(rw) == 1

@@ -6,6 +6,9 @@
 "track_album_artists_print(ioc, item::JSON3.Object)"
 function track_album_artists_print(ioc, item::JSON3.Object)
     print(ioc, item.name, " \\ ", item.album.name)
+    if get(ioc, :print_date, false)
+        print(ioc, " {", item.album.release_date, "}")
+    end
     ars = item.artists
     vs = [ar.name for ar in ars]
     print(ioc, " \\ ", join(vs, " & "))
@@ -18,37 +21,64 @@ function track_album_artists_print(ioc, item::JSON3.Object)
     nothing
 end
 
-"track_album_artists_print(ioc, item::JSON3.Object)"
+"track_album_artists_print(ioc, DataFrameRow)"
+function track_album_artists_print(ioc, row::DataFrameRow)
+    print(ioc, row.trackname, " \\ ", row.album_name)
+    if get(ioc, :print_date, false)
+        if hasproperty(row, :release_date)
+            print(ioc, " {", row.release_date, "}")
+        end
+    end
+    ars = row.artists
+    print(ioc, " \\ ", join(ars, " & "))
+    if get(ioc, :print_ids, false)
+        track_id = SpTrackId(row.trackid)
+        print(ioc, "  ")
+        show(ioc, MIME("text/plain"), track_id)
+        color_set(ioc)
+    end
+    nothing
+end
+
+"""
+   genres_print(ioc, item::JSON3.Object)
+   Also print artists
+
+   genres_print(ioc, gen::Vector{String}):
+"""
 function genres_print(ioc, item::JSON3.Object)
     ars = item.artists
     # Albums only have empty genres fields (2023).
     for ar in ars
         artist_id = SpArtistId(ar.id)
         artobj = Artists.artist_get(artist_id)[1]
-        gen = artobj.genres
-        if !isempty(gen)
-            print(ioc, "  ", ar.name)
-            if get(ioc, :print_ids, false)
-                print(ioc, "  ")
-                show(ioc, MIME("text/plain"), artist_id)
-                color_set(ioc)
-            end
-            for g in gen
-                print(ioc, " ")
-                io = color_set(ioc, :reverse)
-                print(io, g)
-                print(io, text_colors[:normal])
-                color_set(ioc)
-            end
-        else
-            print(color_set(ioc, :red), " Genres unknown for this artist")
+        print(ioc, "  ", ar.name)
+        if get(ioc, :print_ids, false)
+            print(ioc, "  ")
+            show(ioc, MIME("text/plain"), artist_id)
+            color_set(ioc)
+        end
+        gen = String.(artobj.genres)
+        if ! isempty(artobj.genres)
+            genres_print(ioc, gen)
         end
         println(ioc)
     end
     nothing
 end
-
-
+function genres_print(ioc, gen::Vector{String})
+    if !isempty(gen)
+        for g in gen
+            print(ioc, " ")
+            io = color_set(ioc, :reverse)
+            print(io, g)
+            print(io, text_colors[:normal])
+            color_set(ioc)
+        end
+    else
+        print(color_set(ioc, :red), " Genres unknown for this artist")
+    end
+end
 
 "track_in_playlists_print(ioc, track_id) ---> Bool"
 function track_in_playlists_print(ioc, track_id)
@@ -110,7 +140,7 @@ function build_histogram_data(track_data, playlist_ref, playlist_data)
 end
 
 """
-    select_cols_with_relevant_audio_features(df) 
+    select_cols_with_relevant_audio_features(df)
     ---> DataFrame
 
 Extract the dataframe columns we need for typicality analysis
@@ -184,7 +214,7 @@ function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, t
     title_with_format_characters = "~Distribution of §$(text)~ with highlighted track value of §$(s_track_value)"
     title = characters_to_ansi_escape_sequence(title_with_format_characters)
     p = histogram(data_for_bins, nbins = nbins, title = title,
-        height = height, width = width, 
+        height = height, width = width,
         color = :red, stats = true, labels=true, border =:none, vertical = true)
     #
     # Use the 'xlabel' to mark the current track's value to show how typical it is of this playlist values.
@@ -203,7 +233,7 @@ function plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, t
     xlabel = rpad(repeat(' ', c - 1 ) * "↑ " * s, wi)
     p.xlabel[] = xlabel
     #
-    # Show mean and sample standard deviation 
+    # Show mean and sample standard deviation
     #
     μ = mean(data_for_bins)
     σ = std(data_for_bins, corrected = true)
@@ -236,7 +266,7 @@ end
     track_abnormality_rank_in_list_print(ioc, rpd)
 
 Print the current track's "abnormality" and
-how it ranks compared to the other tracks in the 
+how it ranks compared to the other tracks in the
 playlist.
 """
 function track_abnormality_rank_in_list_print(ioc, rpd)
@@ -293,7 +323,7 @@ function ordinal_string(ordinal, setsize)
         "third"
     elseif ordinal == 4
         "fourth"
-    elseif ordinal == setsize 
+    elseif ordinal == setsize
         "last"
     elseif ld == 1 && ordinal > 20
         "$(ordinal)st"
@@ -310,7 +340,7 @@ end
     playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, playlist_ref,
         current_track_id; func_name = "")\\
     ---> true
-    
+
 Calculate f(playlist_tracks_data) for all tracks. Sort by rising
 return values.
 
@@ -346,7 +376,7 @@ end
 
 function abnormality(playlist_tracks_data::DataFrame)
     tr_af = select_cols_with_relevant_audio_features(playlist_tracks_data)
-    # Rearrange from dataframe to nested vector - one vector 
+    # Rearrange from dataframe to nested vector - one vector
     # contains a feature per track.
     audiodata = Vector{Vector{Float64}}()
     for j in 1:ncol(tr_af)
@@ -461,14 +491,15 @@ function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
     io = color_set(ioc, :176)
     uinp = 'p'
     count = 0
+    msg = characters_to_ansi_escape_sequence("\nSelect option: ¨y : yes, ¨Y : yes to all, ¨n : no, ¨N : no to all, ¨p : play the track to replace ")
     while uinp == 'p' && count < 3
         color_set(io)
-        print(io, "\n$(repeat("  ", count))What does you say? (y: yes, Y: yes to all, n: no, N: no to all, p: play track to replace)")
+        print(io, "\n$(repeat("  ", count))$msg")
         uinp = read_single_char_from_keyboard("yYnNp", default)
         println(io)
         if uinp == 'p'
             context_uri = playlist_ref.id
-            offset = Dict("uri" => track_id, "market" => "NO")  
+            offset = Dict("uri" => track_id, "market" => "NO")
             response = player_resume_playback(;context_uri, offset)
             print(ioc, "\n  ")
             sleep(1)
@@ -488,7 +519,7 @@ end
 We can't use readline(stdin) while in our special replmode - that would block.
 
 If this is called from the normal REPL mode, it will be necessary
-to press enter after the character. 
+to press enter after the character.
 
 If a character not in string_allowed_characters is pressed, returns default.
 """
@@ -524,13 +555,12 @@ menu =  \"\"\"
     print(stdout, characters_to_ansi_escape_sequence(menu))
 end
 ```
-
 """
 function characters_to_ansi_escape_sequence(s)
     l = text_colors[:light_black]
     b = text_colors[:bold]
     n = text_colors[:normal]
-    s = replace(s, "¨" => b , 
+    s = replace(s, "¨" => b ,
         ":" =>  "$n$l:",
         "." => ".$n",
         " or" => "$n$l or$n",
@@ -564,18 +594,67 @@ end
 
 
 """
-    print_and_delete(ioc, str; duration_s = 0.2)
+    print_and_delete(ioc, s; delay_s = 0.2)
 
-Display str for duration_s seconds.
+Display s for delay_s seconds, then remove s again.
 
 Fast feedback to show that something is happening. Unfortunately
-will wait for compilation delays, which we should get rid of.
+won't run prior to compilation delays, which we should get rid of
+in other ways.
 """
-function print_and_delete(ioc, str, duration_s = 0.2)
-    n = length(str)
-    print(ioc, str)
-    sleep(duration_s)
+function print_and_delete(ioc, s, delay_s = 0.2)
+    n = length(s)
+    print(ioc, s)
+    sleep(delay_s)
     REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
     print(ioc, repeat(' ', n))
     REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
+    nothing
+end
+
+"""
+    duration_sec(duration_ms)
+    ---> Int
+Tracks may re-encode with millisecond differences that are uninteresting.
+"""
+duration_sec(duration_ms) = Int.(round.(duration_ms ./ 1000))
+
+# This is intentionally duck-typed
+function market_status(state, this_market::AbstractString)
+    if state isa Vector
+        if isempty(state)
+            :empty
+        elseif this_market ∈ state
+            :included
+        elseif this_market ∉ state
+            :not_included
+        else
+            throw("Not expected .available_market: $state \n $this_market")
+        end
+    else
+        if isequal(state, missing) || state == ""
+            :empty
+        elseif occursin(this_market, state)
+            :included
+        elseif ! occursin(this_market, state)
+            :not_included
+        else
+            throw("Unpected .available_market: $state \n $this_market")
+        end
+    end
+end
+
+"""
+    semantic_equals(x::AbstractString, y::AbstractString)
+
+Compare lowercase version, letters and digits only
+"""
+function semantic_equals(x::AbstractString, y::AbstractString)
+    semantic_string(x) == semantic_string(y)
+end
+function semantic_string(x)
+    e = lowercase(x)
+    f = filter(e) do c
+           isletter(c) || isdigit(c)
+    end
 end

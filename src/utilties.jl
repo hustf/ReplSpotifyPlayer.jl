@@ -1,19 +1,19 @@
 """
     metronome(bpm::Real=72, bpb::Int=4; bars = 5, interruptchannel = Channel(1))
 
-Sometimes, Spotify's rhytm analysis feels wrong. Check it with the metronome!
+Sometimes, Spotify's beats per minute feels like 2 / 3 of felt rhythm (for 5 beats per bar). Check it with the metronome!
 
 We doubt if the song below has three beats per bar ('time signature'), and tempo
 107.809 beats per minute. Let's check!
 
-# Example 
+# Example
 ```
 julia>    e : exit.    f(→) : forward.  b(←) : back.  p: pause, play.  0-9:  seek.
    a : analysis.   l : playlist.      del(fn + ⌫  ) : delete from playlist.
    i : toggle ids. s : search syntax.
   Puppy Toy \\ Knowle West Boy \\ Tricky
  ◍ >a
-acousticness     0.175   key               7      
+acousticness     0.175   key               7
 speechiness      0.0653  mode              1
 instrumentalness 1.09e-6 time_signature    3
 liveness         0.304   tempo             107.809
@@ -29,7 +29,7 @@ julia> metronome(107.809, 3)
 
 # Advanced use
 
-The Repl mode runs this asyncronously, and can stop it before 
+The Repl mode runs this asyncronously, and can stop it before
 it's finished by putting something on `stop_channel`.
 """
 function metronome(bpm::Real=72, bpb::Int=4; bars = 10, stop_channel = Channel(1))
@@ -62,7 +62,7 @@ end
 
 An example of a one-argument function, useful for pipelining syntax like in the example:
 
-# Example 
+# Example
 ```
 julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
 12
@@ -79,7 +79,7 @@ end
     euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
     ---> Float64
 
-This method shows how well a multi-dimensional sample would fit in 'sets'. If the sample is 
+This method shows how well a multi-dimensional sample would fit in 'sets'. If the sample is
 already part of the set, use the method below.
 
 Note that actually adding the sample to the set would change the mean and deviation. This method can be
@@ -104,7 +104,7 @@ function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_s
 end
 
 """"
-    euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64) 
+    euclidean_normalized_sample_deviation(sets::Vector{Vector{Float64}}, sample_no::Int64)
     ---> Float64
 
 This could be called the coefficient of variation for multi-dimensional samples.

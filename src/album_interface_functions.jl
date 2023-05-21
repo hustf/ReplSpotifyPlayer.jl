@@ -26,3 +26,5 @@ function album_details_print(ioc, album_id, album::JSON3.Object)
     color_set(ioc)
     nothing
 end
+
+

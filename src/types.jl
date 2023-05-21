@@ -1,7 +1,6 @@
-# This file defines PlaylistRef, TrackRef and
-# what's needed to keep these in Dataframes
-# while loading and saving .csv files.
-
+# This file defines PlaylistRef and
+# what's needed to persist the types
+# while loading and saving .csv.
 
 # DataFrames uses PrettyTables to show content. Which does not play well
 # with our coloured Sp____Id types. We have to pretend black-and-white output.
@@ -26,9 +25,7 @@ function _render_text(
         :limit => limit_printing,
         :color => false
     )
-
     str = sprint(print, v; context = context)
-
     return _render_text(
         Val(:print),
         io,
@@ -69,28 +66,15 @@ function show(io::IO, m::MIME"text/plain", x::PlaylistRef)
     show(io, m, x.snapshot_id)
 end
 
-
-
-# Note, the idea of having this structure is
-# really low-level debugging. We could probably
-# just as well drop it.
-
-@kwdef struct TrackRef
-    name::String
-    id::SpTrackId
-end
-function TrackRef(name::String, id::SpPlaylistId)
-    name = string(item.name)
-    track_id = SpTrackId(item.id)
-    TrackRef(;name, track_id)
-end
-
+# We define these for the benefit of CSV.jl
 tryparse(T::Type{SpTrackId}, s::String) = T(s)
+tryparse(T::Type{SpAlbumId}, s::String) = T(s)
+tryparse(T::Type{SpArtistId}, s::String) = T(s)
 
 function tryparse(T::Type{PlaylistRef}, s::String)
     pref = "PlaylistRef"
     pref1 =  string(@__MODULE__ ) * "." * pref
-    if ! (startswith(s,  pref1)  || startswith(s,  pref)) 
+    if ! (startswith(s,  pref1)  || startswith(s,  pref))
         throw("tryparse: Expected prefix $pref, got input: $s")
      end
      v = split(s[findfirst('(', s) + 2 : end - 1], "\", ")
@@ -99,4 +83,3 @@ function tryparse(T::Type{PlaylistRef}, s::String)
      id = SpPlaylistId(v[3])
      T(name, snapshot_id, id)
 end
-

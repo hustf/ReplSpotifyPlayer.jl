@@ -9,7 +9,7 @@ canvas = p.graphics
 using UnicodePlots: lines!, points!, pixel!
 lines!(canvas, 0., 0., 1., 1.; color=:cyan)
 
-data_for_bins = rand(10000) .* 3 .- 1 
+data_for_bins = rand(10000) .* 3 .- 1
 p = histogram(data_for_bins, nbins=10, vertical = true, height=10, color =:red, name="A", width = 80, stats=true)
 canvas = p.graphics
 mi = minimum(data_for_bins)

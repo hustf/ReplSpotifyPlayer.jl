@@ -1,17 +1,19 @@
 using REPL
-function print_and_delete(ioc, s)
+"print_and_delete(ioc, s; delay_s = 0.2)"
+function test_print_and_delete(ioc, s; delay_s = 0.2)
     n = length(s)
     print(ioc, s)
-    sleep(0.2)
-    REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
+    sleep(delay_s)
+    out = REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
     print(ioc, repeat(' ', n))
     REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), n)
+    out
 end
 
 
 begin
     print(stdout, "Starting")
-    print_and_delete(stdout, "HI there!")
+    test_print_and_delete(stdout, "HI there!")
     print(stdout, "Ending")
 end
 
