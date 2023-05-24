@@ -83,6 +83,11 @@ function init()
     @assert isdefined(Base, :active_repl)
     PLAYERprompt[] = add_seventh_prompt_mode(Base.active_repl)
     define_single_keystrokes!(PLAYERprompt[])
+    # This improves the default when using Windows Terminal.
+    # When using VS code, no difference. But note, in VS Code,
+    # the terminal may 'blink' when we're using control codes,
+    # like in 'print_and_delete'
+    UnicodePlots.truecolors!()
     @info "Type `:` to enter mini player mode, `e` to exit."
 end
 

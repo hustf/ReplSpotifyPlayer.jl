@@ -33,6 +33,7 @@ The Repl mode runs this asyncronously, and can stop it before
 it's finished by putting something on `stop_channel`.
 """
 function metronome(bpm::Real=72, bpb::Int=4; bars = 10, stop_channel = Channel(1))
+    # TODO consider delete if 'rhythmic_progress_print' works well!
     pause = 60 / bpm
     counter = 0
     bar = 0
@@ -52,7 +53,7 @@ function metronome(bpm::Real=72, bpb::Int=4; bars = 10, stop_channel = Channel(1
         end
     end
     # Cleanup
-    isready(stop_channel) && take!(interruptchannel)
+    isready(stop_channel) && take!(stop_channel)
     nothing
 end
 

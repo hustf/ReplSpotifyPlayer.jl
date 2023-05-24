@@ -601,6 +601,8 @@ Display s for delay_s seconds, then remove s again.
 Fast feedback to show that something is happening. Unfortunately
 won't run prior to compilation delays, which we should get rid of
 in other ways.
+
+Note: In VSCode terminal, this may temporarily hide previous output.
 """
 function print_and_delete(ioc, s, delay_s = 0.2)
     n = length(s)
@@ -657,4 +659,186 @@ function semantic_string(x)
     f = filter(e) do c
            isletter(c) || isdigit(c)
     end
+end
+
+function plot_audio(ioc, track_id) 
+    json, waitsec = tracks_get_audio_analysis(track_id)
+    plot_audio(ioc, track_id, json)
+end
+function plot_audio(ioc, track_id, json)
+    plot_audio_sections(ioc, json.sections)
+    plot_audio_segments(ioc, json.segments)
+end
+function plot_audio_sections(ioc, sections)
+    # Confidence
+    plot_audio_sections(ioc, sections, :confidence, "Confidence in tempo")
+    # Tempo
+    plot_audio_sections(ioc, sections, :tempo, "Tempo [bpm]")
+end
+function plot_audio_sections(ioc, sections, tempo_or_confidence::Symbol, title)
+    # Graphics height in "pixels" 
+    height = 5
+    # Plot graphics width - margin, gutter, border etc.
+    nx = displaysize(ioc)[2] - 3 - 4 - 1
+    # Map from graphics to time 
+    t_rel(ix) = (ix - 1) / nx
+    # Map from time to section
+    dur_s = sections[end].start + sections[end].duration
+    section_starts_rel = [sec.start / dur_s for sec in sections]
+    section_no(tr) = findlast(<=(tr), section_starts_rel)
+    # Build the vectors
+    t = map(t_rel, 1:nx)
+    vec = map(1:nx) do ix
+        is = section_no(t_rel(ix))
+        sections[is][tempo_or_confidence]
+    end
+    pl = lineplot(t, vec; width = nx, height, title)
+    # The margins argument does not work intuitively, so modify instead:
+    pl.margin[] = 0
+    # Modify x-labels.
+    pop!(pl.decorations, :bl)
+    pop!(pl.decorations, :br)
+    push!(pl.decorations, :b => stretch_string_to_length(0:10, nx))
+    println(ioc, pl)
+    pl
+end
+
+function plot_audio_segments(ioc, segments)
+    # Timbre
+    ti = ["Lo", "Br", "Fl", "At", "5 ", "6 ", "7 ", "8 ", "9 ", "10", "11", "12"]
+    plot_audio_segments(ioc, segments, :timbre, ti, "Timbre - time")
+    # Pitches
+    to = ["C ", "D♭", "D ", "E♭", "E ", "F ", "G♭", "G ", "A♭", "A ", "B♭", "H "]
+    plot_audio_segments(ioc, segments, :pitches, to, "Pitches - time")
+end
+
+function plot_audio_segments(ioc, segments, pitches_or_timbre::Symbol, potential_ylabels, title)
+    # Pitches or timbres vector length = graphics height in "pixels"
+    np = 12
+    # Plot graphics width - margin, gutter, border etc.
+    nx = displaysize(ioc)[2] - maximum(length.(potential_ylabels)) - 4 - 1
+    # Map from graphics to time 
+    t_rel(ix) = (ix - 1) / nx
+    # Map from time to segment
+    dur_s = segments[end].start + segments[end].duration
+    segment_starts_rel = [seg.start / dur_s for seg in segments]
+    segment_no(tr) = findlast(<=(tr), segment_starts_rel)
+    # Build the matrix
+    mat = repeat((1 / np ) * collect(1:nx)', outer=(np, 1))
+    for ix = 1:nx
+        is = segment_no(t_rel(ix))
+        mat[:, ix] = segments[is][pitches_or_timbre]
+    end
+    # The matrix as graphics
+    pl = heatmap(mat; width = nx, height = np, colorbar = false, xfact = 10 / (nx - 1), title)
+    # The margins argument does not work intuitively, so modify instead:
+    pl.margin[] = 0
+    # Modify labels and decorations. Each line takes two "pixel heights".
+    pop!(pl.decorations, :bl)
+    pop!(pl.decorations, :br)
+    push!(pl.decorations, :b => stretch_string_to_length(0:10, nx))
+    push!(pl.labels_left, 6 => potential_ylabels[1]) # Bottom label
+    push!(pl.labels_left, 5 => potential_ylabels[3])
+    push!(pl.labels_left, 4 => potential_ylabels[5])
+    push!(pl.labels_left, 3 => potential_ylabels[7])
+    push!(pl.labels_left, 2 => potential_ylabels[9])
+    push!(pl.labels_left, 1 => potential_ylabels[11]) # Top label
+    # Display plot prior to return.
+     println(ioc, pl)
+    pl
+end
+
+"""
+    stretch_string_to_length(s, l)
+
+# Examples
+```
+julia> stretch_string_to_length("123", 5)
+"1 2 3"
+
+julia> stretch_string_to_length("123", 6)
+"1  2 3"
+
+julia> stretch_string_to_length(1:3,5)
+"1 2 3"
+
+julia> stretch_string_to_length(8:10,5)
+"8 910"
+
+julia> stretch_string_to_length(8:10,6)
+"8 9 10"
+```
+"""
+function stretch_string_to_length(s, l)
+    ngaps = length(s) - 1
+    ls = length(join(string.(s)))
+    avg_gaplength = (l - ls) / ngaps
+    r = ""
+    for (c, g) in zip(s[1:(end - 1)], 1:ngaps)
+        r *= string(c) * repeat(" ", Int(floor(avg_gaplength)))
+        r *= repeat(" ", Int(ceil(g * (avg_gaplength + 1))) - length(r))
+    end
+    r *= string(s[end])
+    @assert length(r) == l "$(length(r)) > $l: $r"
+    r
+end
+
+
+function rhythmic_progress_print(ioc, json, t_0, progress_0)
+    # Line width to use, all of it at full time
+    nx = displaysize(ioc)[2] - 3 - 4 - 1
+    # Map from time to column
+    dur_s = json.beats[end].start + json.beats[end].duration
+    column_no(t_passed) = t_passed < dur_s ? Int(floor(nx * t_passed / dur_s + 1)) : nothing
+    current_column_no() = column_no(time() - t_0 + progress_0)
+    # Map from time to beat no.
+    beat_starts = [beat.start for beat in json.beats]
+    beat_no(time_progress) = findlast(<=(time_progress), beat_starts)
+    # Map from time to bar no.
+    bar_starts = [bar.start for bar in json.bars]
+    bar_no(time_progress) = findlast(<=(time_progress), bar_starts)
+    beat_duration(time_progress) = time_progress < dur_s ? json.beats[beat_no(time_progress)][:duration] : nothing
+    current_pausetime() = beat_duration(time() - t_0 + progress_0)
+    current_beat_no() = beat_no(time() - t_0 + progress_0)
+    current_bar_no() = bar_no(time() - t_0 + progress_0)
+    func(stop_channel) = rhythmic_progress_print(ioc, current_column_no, current_pausetime, current_beat_no, current_bar_no; stop_channel)
+    println(ioc, "Menu keys 0-9 active, other keys exit to menu.")
+    # Run the defined metronome asyncronously
+    stop_channel = Channel(func, 1)
+    sleep(1)
+    # Wait for a key to stop metronome
+    returnkey = String(read(stdin, 1))
+    if isopen(stop_channel)
+        put!(stop_channel, 1)
+    end
+    println(ioc)
+    if '0' <= Char(returnkey[1]) <= '9'
+        returnkey
+    else
+        nothing
+    end
+end
+
+function rhythmic_progress_print(ioc, current_column_no, current_pausetime, current_beat_no, current_bar_no; stop_channel = Channel(1))
+    ccno = current_column_no()
+    cbeno = current_beat_no()
+    cbano = current_bar_no()
+    beatcount = 0
+    while !isnothing(ccno) && ! isready(stop_channel)
+        print(ioc, repeat(" ", ccno))
+        print(ioc, beatcount)
+        sleep(current_pausetime())
+        REPL.Terminals.clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
+        ccno = current_column_no()
+        cbeno = current_beat_no()
+        if cbano !== current_bar_no()
+            beatcount = 1
+        else
+            beatcount += 1
+        end
+        cbano = current_bar_no()
+    end
+    # Cleanup
+    isready(stop_channel) && take!(interruptchannel)
+    nothing
 end

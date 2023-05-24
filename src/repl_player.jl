@@ -154,6 +154,7 @@ function current_audio_features_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     isnothing(st.item) && return false
+    t_0 = time()
     if st.currently_playing_type !== "track"
         io = color_set(ioc, :red)
         print(io, "Not currently playing a track.")
@@ -172,6 +173,23 @@ function current_audio_features_print(ioc)
         println(ioc,  "energy           $( af[:energy])")
         println(ioc,  "danceability     $( af[:danceability])")
         println(ioc,  "valence          $( af[:valence])")
+    end
+    plot_audio(ioc, track_id)
+    # The plots we just made begs the question: Where are we in the tune?
+    # Let's display a 'progress / metronome' thing!
+    json, waitsec = tracks_get_audio_analysis(track_id)
+    color_set(ioc)
+    # We listen for keys 0-9 only. Other keypresses will return nothing.
+    returnkey  = rhythmic_progress_print(ioc, json, t_0, st.progress_ms / 1000)
+    while ! isnothing(returnkey)
+        color_set(ioc)
+        # Could be recursive if we allowed all keypresses.
+        act_on_keystroke(returnkey) # 'Seek' only.
+        st = get_player_state(ioc)
+        isempty(st) && return false
+        isnothing(st.item) && return false
+        t_0 = time()
+        returnkey  = rhythmic_progress_print(ioc, json, t_0, st.progress_ms / 1000)
     end
     true
 end
@@ -197,7 +215,7 @@ function seek_in_track_print(ioc, decile)
     player_seek(new_progress_ms)
     ns = duration_sec(new_progress_ms)
     ts = duration_sec(t)
-    println(ioc, "$(ns) s / $(ts) s")
+    println(ioc, "$(ns) s / $(ts) s = $(Int(round(10 * ns / ts))) / 10")
     true
 end
 

@@ -72,3 +72,37 @@ equaldic = Dict(
 
 testdic = filter(p -> semantic_equals(p[1], p[2]), dic)
 @test testdic == equaldic
+
+using ReplSpotifyPlayer: color_set, get_player_state, rhythmic_progress_print, tracks_get_audio_analysis, duration_sec
+
+ioc = color_set(IOContext(stdout, :print_ids => true), :green)
+st = get_player_state(ioc)
+t_0 = time()
+progress_0 = st.progress_ms / 1000
+track_id = SpTrackId(st.item.uri)
+json, waitsec = tracks_get_audio_analysis(track_id);
+# Low-level. Beware, don't run until close to end of track. Stop disabled!
+begin
+    # Line width to use, all of it at full time
+    nx = displaysize(ioc)[2] - 3 - 4 - 1
+    # Map from time to column
+    dur_s = json.beats[end].start + json.beats[end].duration
+    column_no(t_passed) = t_passed < dur_s ? Int(floor(nx * t_passed / dur_s + 1)) : nothing
+    current_column_no() = column_no(time() - t_0 + progress_0)
+    # Map from time to beat no.
+    beat_starts = [beat.start for beat in json.beats]
+    beat_no(time_progress) = findlast(<=(time_progress), beat_starts)
+    # Map from time to bar no.
+    bar_starts = [bar.start for bar in json.bars]
+    bar_no(time_progress) = findlast(<=(time_progress), bar_starts)
+    beat_duration(time_progress) = time_progress < dur_s ? json.beats[beat_no(time_progress)][:duration] : nothing
+    current_pausetime() = beat_duration(time() - t_0 + progress_0)
+    current_beat_no() = beat_no(time() - t_0 + progress_0)
+    current_bar_no() = bar_no(time() - t_0 + progress_0)
+    rhythmic_progress_print(ioc, current_column_no, current_pausetime, current_beat_no, current_bar_no)
+end
+
+# With stopping option...
+rhythmic_progress_print(ioc, json, t_0, progress_0)
+
+
