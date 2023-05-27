@@ -11,7 +11,7 @@ julia> # Press ':'
 julia> 
 e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
 del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
-i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
+i : toggle ids.       a : audio features.       h : housekeeping.      ? : syntax.
 Sort then select  t : by typicality.  o : other features.  ↑ : previous selection.
   Harry's Record Machine \ Scratch Marchin' \ Kormac
  ◍ >
@@ -46,9 +46,9 @@ julia> # Press ':'
 
 julia> 
 e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
-del(fn + ⌫  ) : delete track from playlist.       c : context.       m : musician.
-i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
-      Sort playlist, then select        t : by typicality.     o : other features.
+del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
+i : toggle ids.       a : audio features.       h : housekeeping.      ? : syntax.
+Sort then select  t : by typicality.  o : other features.  ↑ : previous selection.
   Harry's Record Machine \ Scratch Marchin' \ Kormac
  ◍ >
 ```

@@ -146,7 +146,8 @@ end
 """
     current_audio_features_print(ioc)  ---> Bool
 
-Audio features in two columns.
+Audio features as text, then plots. Will end with displaying 
+the rhythmic progression for comparison with plot x-axis.
 
 key: 'a'
 """
@@ -154,7 +155,6 @@ function current_audio_features_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     isnothing(st.item) && return false
-    t_0 = time()
     if st.currently_playing_type !== "track"
         io = color_set(ioc, :red)
         print(io, "Not currently playing a track.")
@@ -162,7 +162,6 @@ function current_audio_features_print(ioc)
         return false
     end
     track_id = SpTrackId(st.item.uri)
-     # Consider taking it from tracks data
     af = tracks_get_stored_or_api_audio_features(track_id)
     if ! isempty(af)
         println(ioc,  rpad("acousticness     $(af[:acousticness])", 25)     * rpad("key               $(af[:key])", 25))
@@ -174,23 +173,30 @@ function current_audio_features_print(ioc)
         println(ioc,  "danceability     $( af[:danceability])")
         println(ioc,  "valence          $( af[:valence])")
     end
-    plot_audio(ioc, track_id)
-    # The plots we just made begs the question: Where are we in the tune?
-    # Let's display a 'progress / metronome' thing!
     json, waitsec = tracks_get_audio_analysis(track_id)
+    # Mark the current time at once, so we can calculate a current progress later.
+    t_0 = time()
+    plot_audio(ioc, track_id, json)
+    # The plots we just made begs the question: Where are we in the tune?
+    # Let's display a 'rhytmic progress' thing!
     color_set(ioc)
     # We listen for keys 0-9 only. Other keypresses will return nothing.
     returnkey  = rhythmic_progress_print(ioc, json, t_0, st.progress_ms / 1000)
     while ! isnothing(returnkey)
         color_set(ioc)
-        # Could be recursive if we allowed all keypresses.
-        act_on_keystroke(returnkey) # 'Seek' only.
+        # This could be recursive if we allowed keypress 'a'. We allow '0' to '9' (seek) only.
+        #act_on_keystroke(returnkey)
+        seek_in_track_print(ioc, Meta.parse(string(returnkey)))
+        # Allow a little time for player to be updated with the actual progress.
+        sleep(0.5)
         st = get_player_state(ioc)
         isempty(st) && return false
         isnothing(st.item) && return false
         t_0 = time()
-        returnkey  = rhythmic_progress_print(ioc, json, t_0, st.progress_ms / 1000)
+        returnkey  = rhythmic_progress_print(IOContext(ioc, :print_instructions => false), json, t_0, st.progress_ms / 1000)
     end
+    color_set(ioc)
+    println(ioc)
     true
 end
 
@@ -229,7 +235,10 @@ key: '?'
 function help_seek_syntax_print(ioc)
     mymd = md"""
 
-Exit the replmode by pressing 'e'.
+Exit the replmode by pressing 'e' or 'backspace'.
+
+Find track ids, artist ids, album ids, playlist ids by pressing 'i' and then 'c'. The context
+you are in is what kind of list you are currently playing from in Spotify's app.
 
 ## Save typing with shorthand single-argument functions:
 
@@ -247,44 +256,6 @@ Seek for " love " in the Tracks DataFrame TDF[] and play all results.
 julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :trackid] |> playtracks
 12
 ```
-
-Is the rhythm as inspected with `r : rhythm test` really coorect? Get the trackid by `i : toggle ids`. And then
-dive deeper:
-
-```
-julia> # press :
-julia>
-e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
-del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
-i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
-Sort then select  t : by typicality.  o : other features.  ↑ : previous selection.
-  Heavenly Shower \ Look To Your Own Heart \ Lisa Ekdahl
- ◍ >i Including ids from now on
-  Heavenly Shower \ Look To Your Own Heart \ Lisa Ekdahl  spotify:track:2GAVI4dLjAapIyJekbZb2L
-julia> track = "spotify:track:2GAVI4dLjAapIyJekbZb2L"
-julia> json = ReplSpotifyPlayer.tracks_get_audio_analysis(track)[1]
-JSON3.Object{Base.CodeUnits{UInt8, String}, Vector{UInt64}} with 7 entries:
-  :meta     => {…
-  :track    => {…
-  :bars     => Object[{…
-  :beats    => Object[{…
-  :sections => Object[{…
-  :segments => Object[{…
-  :tatums   => Object[{…
-
-julia> begin
-        playtracks([track])
-        bpb = 3
-        for item in json.bars
-            print("|")
-            for beat in 1:bpb
-                sleep(item.duration / bpb)
-                print(".")
-            end
-        end
-    end
-```
-
 
 """
     show(ioc, MIME("text/plain"),mymd)
@@ -308,59 +279,6 @@ function current_artist_and_tracks_in_data_print(ioc)
         artist_and_tracks_in_data_print(ioc, st.item)
     end
 end
-
-
-"""
-    current_metronome_print(ioc)  ---> Bool
-
-Shows a beat / bar counter asyncronously until the end of track.
-
-key: 'r'
-"""
-function current_metronome_print(ioc)
-    st = get_player_state(ioc)
-    isempty(st) && return false
-    isnothing(st.item) && return false
-    if st.currently_playing_type !== "track"
-        io = color_set(ioc, :red)
-        print(io, "Not currently playing a track.")
-        color_set(ioc)
-        return false
-    end
-    track_id = SpTrackId(st.item.uri)
-    af = tracks_get_stored_or_api_audio_features(track_id)
-    isempty(af) && return false
-    bpm = af[:tempo]
-    bpb = Int(af[:time_signature])
-    duration_s = duration_sec(af[:duration_ms])
-    position_s = duration_sec(get_player_state(ioc).progress_ms)
-    bars_per_minute = bpm / bpb
-    bars_in_track = Int(round(duration_s * bars_per_minute / 60 ))
-    current_bar = Int(round(position_s * bars_per_minute / 60)) + 1
-    bars = bars_in_track - current_bar
-    println(ioc)
-    println(ioc, lpad("Tempo            $(bpm)", 40) * " [Beats Per Minute]")
-    println(ioc, lpad("Time_signature        $(bpb)", 40), " [Beats Per Bar]")
-    println(ioc, lpad("Duration        $(duration_s)", 40), " [s]")
-    println(ioc, lpad("Position        $(position_s)", 40), " [s]")
-    println(ioc, lpad("Bars in track    $(bars_in_track)", 40))
-    println(ioc, lpad("Current bars    $(current_bar)", 40))
-    println(ioc, lpad("Remaining bars  $(bars)", 40))
-    println(ioc)
-    metfunc(stop_channel) = metronome(bpm, bpb; bars, stop_channel)
-    # Run the defined metronome asyncronously
-    stop_channel = Channel(metfunc, 1)
-    println(ioc, "Press a key to stop metronome")
-    sleep(1 / (bpm / 60) * bpb)
-    # Wait for a key to stop metronome
-    read(stdin, 1)
-    if isopen(stop_channel)
-        put!(stop_channel, 1)
-    end
-    println(ioc)
-    true
-end
-
 
 """
     current_playlist_ranked_select_print(f, ioc)

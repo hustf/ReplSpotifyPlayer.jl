@@ -1,5 +1,15 @@
 function housekeeping_print(ioc, tracks_data::DataFrame)
     remove_tracks_without_refs_and_print!(ioc,  tracks_data)
+    old_tracks_data = copy(tracks_data)
+    # Step 0: Check for corrupted data
+    problem_track_ids = filter(pa-> pa[2] > 1, countmap(tracks_data.trackid))
+    if ! isempty(problem_track_ids)
+        msg = "The local tracks data contain duplicate track ids. You may want to manually edit or delete entirely the file \n $(fullpath_trackrefs())\n"
+        msg *= "The repeated track ids are $problem_track_ids\n"
+        msg *= "Exiting housekeeping."
+        @warn msg
+        nothing
+    end
     # Step 1
     clones_data = tracks_with_clones_data(tracks_data)
     tracks_data = suggest_and_make_clone_track_reductions_print(ioc, clones_data, tracks_data)
@@ -16,16 +26,74 @@ function housekeeping_print(ioc, tracks_data::DataFrame)
     end
     color_set(ioc)
     save_tracks_data(tracks_data)
+    # Step Optional: Manual selection
+    clones_data = tracks_with_clones_data(tracks_data)
+    if ! isempty(clones_data)
+        if isequal(tracks_data, old_tracks_data)
+            tracks_data = make_manual_clone_track_reductions_print(ioc, clones_data, tracks_data)
+        else
+            println(ioc, "\nChanges were made to in-memory data during houskeeping. Since the local data may not yet reflect all playlists, we skip manual selection between clone tracks. Press 'h' again to make manual clone reductions.")
+        end
+    end
     nothing
 end
 
-"Prune tracks that have been deleted from all owned playlists"
-function remove_tracks_without_refs_and_print!(ioc,  tracks_data; silent = false)
-    io = color_set(ioc, :normal)
-    ! silent && println(io, "Pruning unreferred tracks.")
+
+"""
+    make_manual_clone_track_reductions_print(ioc, clones_data, tracks_data)
+
+Assuming there's no obvious or consistent criterion to select between further clones,
+it is now up to user to select one of existing tracks clones. It's a bit tedious, but
+the only way to avoid 'Golddigger' popping up lots of times in every playlist.
+"""
+function make_manual_clone_track_reductions_print(ioc, clones_data, tracks_data)
+    n = nrow(clones_data)
+    io = color_set(ioc, :light_black)
+    println(io, "\nManually selecting between $n clones in pairs.\n")
+    # user_input is defined outside the loop and replacement function, so that if user replies ('Y' or 'N'),
+    # no more questions need be asked.
+    user_input = 'n'
+    # index u, for the 'current' object
+    for u in 1:n
+        # look for index v above and below u so that they index clones of each other.
+        v = u - 1
+         if v < 1 || clones_data[u, :isrc] !== clones_data[v, :isrc]
+            v = u + 1
+            if v > n || clones_data[u, :isrc] !== clones_data[v, :isrc]
+                ioco = color_set(io, :yellow)
+                println(ioco, "\nUnexpected: Neither above nor below is a clone with u.")
+                println(ioco, "u, v = $u, $v")
+                @show  clones_data[u, :trackname] clones_data[v, :trackname]
+                color_set(io)
+                continue
+            end
+        end
+        cur_row = clones_data[u, :]
+        adj_row = clones_data[v, :]
+        # User can choose 'Y' or 'N', which are valid choices for the rest of the loop. 'y' and 'n' are single choices.
+        color_set(io)
+        print(io, "$u/$n ")
+        if cur_row.trackid !== adj_row.trackid cur_row.trackid
+            user_input = make_single_replacement_with_permission_print(io, user_input, cur_row, adj_row, tracks_data)
+            if user_input == 'y'
+                # If the replacement was made, we don't want to ask about the oposite replacement 
+                # as the next question in the loop.
+                # We're mutating the 'clone_tracks' data. The 'tracks_data' is changed based
+                # on online playlist outside of this loop.
+                cur_row.trackid = adj_row.trackid
+            end
+        end
+        user_input == 'N' && break
+    end # for
+    latest_tracks_data = tracks_data_update(;forceupdate = true)
+    if ! isempty(clones_data)
+        color_set(io)
+        println(io, "\nFinished manually selecting between any clone pairs.")
+    end
     color_set(ioc)
-    filter!(:playlistref => ! ismissing, tracks_data)
+    latest_tracks_data
 end
+
 
 
 """
@@ -145,9 +213,19 @@ function make_single_replacement_with_permission_print(ioc, user_input, du::Data
         playlist_no_details_print(color_set(io, :blue), plref)
         print(ioc, "  ")
     end
+    if du.albumtype == dv.albumtype
+        if isequal(du.available_markets, String[]) || ismissing(du.available_markets)
+            print(color_set(ioc, :light_black), "\n\t\t Current track has no market limitations.")
+        else
+            print(color_set(ioc, :light_black), "\n\tCurrent track's available markets is ")
+            show(IOContext(color_set(ioc, :green), :limit => true), du.available_markets)
+        end
+    end
     color_set(ioc)
     @assert du.isrc == dv.isrc
-    println(color_set(ioc, :light_black), "\n\t...we suggest to change with the identical International Standard Recording Code ", dv.isrc)
+    print(color_set(ioc, :light_black), "\n\n\t...we suggest to ")
+    print(color_set(ioc, :normal), "replace with ")
+    println(color_set(ioc, :light_black), "the identical International Standard Recording Code ", dv.isrc, "\n")
     print(io, '\t')
     track_album_artists_print(color_set(io, :green), dv)
     print(color_set(ioc, :light_black), "\n\twhich is on an ")
@@ -165,22 +243,19 @@ function make_single_replacement_with_permission_print(ioc, user_input, du::Data
         print(color_set(ioc, :light_black), " and is not yet referred in your playlists.")
     end
     if du.albumtype == dv.albumtype
-        print(color_set(ioc, :light_black), "\n\tThe current track's available markets is ")
-        show(IOContext(color_set(ioc, :green), :limit => true), du.available_markets)
-        if dv.available_markets == String[]
-            print(color_set(ioc, :light_black), "\n\t\t while the replacement is unlimited.")
+        if isequal(dv.available_markets, String[]) || ismissing(dv.available_markets)
+            print(color_set(ioc, :light_black), "\n\t\t Replacement track has no market limitations.")
         else
-            print(color_set(ioc, :light_black), "\n\t\t while replacement available markets includes ")
-            color_set(ioc)
-            print(color_set(ioc, :green), get_user_country())
+            print(color_set(ioc, :light_black), "\n\tReplacement track's available markets is ")
+            show(IOContext(color_set(ioc, :green), :limit => true), dv.available_markets)
         end
     end
     if user_input ∉ "YN"
-        user_input = pick_ynYNp_and_print(ioc, 'n', first(plrefs_u), du.trackid)
+        user_input = pick_ynYNp_and_print(ioc, 'n', first(plrefs_v), dv.trackid)
     end
     color_set(ioc)
     if user_input ∈ "Yy"
-        println(color_set(ioc, :normal), "\n\tReplacing clone track with suggested original.")
+        println(color_set(ioc, :normal), "\n\tReplacing clone track.")
         replace_track_in_playlists(plrefs_u, du.trackid => dv.trackid)
     else
         println(color_set(ioc, :normal), "\tNothing changed.")
@@ -215,6 +290,7 @@ function prefer_adjacent_clone_over_current(cur_row, adj_row)
         (:not_included, :empty)
     ])
     (market_status_cur , market_status_adj) ∈ market_criteria && return true
+    # If a track appears with fewer credited artist, that is preferrable??
     if cur_row.album_id == adj_row.album_id || semantic_equals(cur_row.album_name, adj_row.album_name)
         # If the references are to the same album, we can prefer
         # the adjacent clone with less restraint.

@@ -31,14 +31,14 @@ export Albums
 
 #, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
 
+# TODO reconsider exports.
 export JSON3
 export PlaylistRef, authorize, DataFrame
-
 export TDF
 export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snapshot_in_data
 export is_track_in_data
 export tracks_data_load_and_update, save_tracks_data
-export metronome, playtracks
+export playtracks
 export artist_get_all_albums
 
 """

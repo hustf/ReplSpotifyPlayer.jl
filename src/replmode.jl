@@ -97,10 +97,6 @@ function act_on_keystroke(char)
         io = color_set(ioc, :yellow)
         current_artist_and_tracks_in_data_print(io)
         color_set(ioc)
-    elseif c == 'r'
-        io = color_set(ioc, :normal)
-        current_metronome_print(io)
-        color_set(ioc)
     elseif c == 't'
         io = color_set(ioc, :normal)
         PREVIOUS_FEATURE_SELECTION[]  = sort_playlist_other_select_print(io; pre_selection = :abnormality)
@@ -231,7 +227,6 @@ function define_single_keystrokes!(special_prompt)
         d['i'] = wrap_command
         d['?'] = wrap_command
         d['m'] = wrap_command
-        d['r'] = wrap_command
         d['t'] = wrap_command
         d['h'] = wrap_command
         d['o'] = wrap_command
@@ -262,7 +257,7 @@ function print_menu()
     menu = """
     ¨e : exit.     ¨f(¨→) : forward.     ¨b(¨←) : back.     ¨p: pause, play.     ¨0-9:  seek.
     ¨del(¨fn + ¨⌫  ) : delete track from playlist. ¨c : context. ¨m : musician. ¨g : genres.
-    ¨i : toggle ids. ¨r : rhythm test. ¨a : audio features. ¨h : housekeeping. ¨? : syntax.
+    ¨i : toggle ids.       ¨a : audio features.       ¨h : housekeeping.      ¨? : syntax.
     ~Sort then select § ¨t : by typicality.  ¨o : other features.  ¨↑ : previous selection.
     """
     print(stdout, characters_to_ansi_escape_sequence(menu))

@@ -37,7 +37,7 @@ ana, aid = artist_get_all_albums(artist_id; include_groups = "");
 julia>
 e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
 del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
-i : toggle ids. r : rhythm test. a : audio features. h : housekeeping. ? : syntax.
+i : toggle ids.       a : audio features.       h : housekeeping.      ? : syntax.
 Sort then select  t : by typicality.  o : other features.  ↑ : previous selection.
   Wish On My Star \ Gently Weeps \ Jake Shimabukuro  spotify:track:1TOy77zOYk2FlHTWPUiYH3
  ◍ >c  Gently Weeps  release date: 2006  label: HITCHHIKE RECORDS  tracks: 17  spotify:album:0TDr4j9Q3cQY7GtJNFyC2h

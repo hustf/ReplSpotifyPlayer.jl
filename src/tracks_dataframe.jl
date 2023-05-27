@@ -282,3 +282,16 @@ function sort_playlistrefs_missing_last(rw::DataFrameRow)
     end
     rw
 end
+
+
+"""
+    remove_tracks_without_refs_and_print!(ioc,  tracks_data; silent = false)
+
+Prune tracks that have been deleted from all owned playlists
+"""
+function remove_tracks_without_refs_and_print!(ioc,  tracks_data; silent = false)
+    io = color_set(ioc, :normal)
+    ! silent && println(io, "Pruning unreferred tracks.")
+    color_set(ioc)
+    filter!(:playlistref => ! ismissing, tracks_data)
+end
