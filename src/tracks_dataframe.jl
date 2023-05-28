@@ -214,7 +214,7 @@ end
 function delete_the_last_and_missing_playlistref_columns!(tracks_data)
     coltyps = eltype.(eachcol(tracks_data))
     cols = findall(x -> x <: Union{Missing, PlaylistRef}, coltyps)
-    while isequal(tracks_data[!, last(cols)], [missing])
+    while isequal(unique(tracks_data[!, last(cols)]), [missing])
         select!(tracks_data, Not(last(cols)))
         coltyps = eltype.(eachcol(tracks_data))
         cols = findall(x -> x <: Union{Missing, PlaylistRef}, coltyps)

@@ -7,6 +7,7 @@ import ReplSpotifyPlayer: InlineStrings
 using ReplSpotifyPlayer: groupby, combine, transform, nrow, select!, Not
 using ReplSpotifyPlayer: flatten_horizontally_vector, names, unflatten_horizontally_vector
 using ReplSpotifyPlayer: tracks_namedtuple_from_playlist, tracks_data_append_namedtuple_from_playlist!
+using ReplSpotifyPlayer: delete_the_last_and_missing_playlistref_columns!
 
 @test !isempty(TDF[])
 
@@ -135,3 +136,15 @@ td = DataFrame()
 @test isempty(td)
 tracks_data_append_namedtuple_from_playlist!(td, pl_ref,  nt)
 @test ! isempty(td)
+
+
+# delete_the_last_and_missing_playlistref_columns!(tracks_data)
+
+trr = PlaylistRef(name = "77-78spm", id = SpPlaylistId("spotify:playlist:5KzcRWVCfzbvK2tkos8hfT"), snapshot_id = "MTksZGEyYjFkNzAwZmM0ZDYxMmNmNTBlNzljMDliMmM5ODE1MzQ5OWMwZQ==")
+df = DataFrame(n = [10, 20, 30],
+           playlistref = [trr, trr, trr],
+           playlistref_1 = [trr, missing, missing],
+           playlistref_2 = [missing, missing, missing])
+@test ncol(df) == 4
+delete_the_last_and_missing_playlistref_columns!(df)
+@test ncol(df) == 3

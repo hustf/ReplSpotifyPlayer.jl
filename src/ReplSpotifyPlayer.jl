@@ -22,7 +22,7 @@ using StatsBase: countmap
 import Spotify.JSON3
 import CSV
 import CSV.InlineStrings
-import Base: tryparse, show
+import Base: tryparse, show, length, iterate
 export Spotify
 export SpId, SpCategoryId, SpPlaylistId, SpAlbumId, SpTrackId
 export SpArtistId
@@ -56,6 +56,7 @@ include("artist_interface.jl")
 include("album_interface.jl")
 include("tracks_interface.jl")
 include("utilties_interface.jl")
+include("audio_visualization.jl")
 include("search_interface.jl")
 include("tracks_dataframe.jl")
 include("tracks_dataframe_lookup.jl")

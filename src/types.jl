@@ -66,6 +66,14 @@ function show(io::IO, m::MIME"text/plain", x::PlaylistRef)
     show(io, m, x.snapshot_id)
 end
 
+# We define this because if not, DataFrames errors:
+# julia> flatten(df, :playlistref)
+# ERROR: MethodError: no method matching length(::PlaylistRef)
+# ERROR: MethodError: no method matching iterate(::PlaylistRef)
+# ERROR: MethodError: no method matching iterate(::PlaylistRef, ::Nothing)
+length(::PlaylistRef) = 1
+iterate(x::PlaylistRef) = (x, nothing)
+iterate(::PlaylistRef, ::Any) = nothing
 # We define these for the benefit of CSV.jl
 tryparse(T::Type{SpTrackId}, s::String) = T(s)
 tryparse(T::Type{SpAlbumId}, s::String) = T(s)

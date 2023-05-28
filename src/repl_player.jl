@@ -82,7 +82,7 @@ function current_context_print(ioc)
             println(ioc, "       Library")
         end
         if ! isnothing(st.context)
-            artist_tracks_in_data_print(ioc, st.context.uri)
+            artist_tracks_in_playlists_print(ioc, st.context.uri)
         end
     else
         # Now also print where the track also appears.
@@ -184,9 +184,9 @@ function current_audio_features_print(ioc)
     returnkey  = rhythmic_progress_print(ioc, json, t_0, st.progress_ms / 1000)
     while ! isnothing(returnkey)
         color_set(ioc)
-        # This could be recursive if we allowed keypress 'a'. We allow '0' to '9' (seek) only.
-        #act_on_keystroke(returnkey)
-        seek_in_track_print(ioc, Meta.parse(string(returnkey)))
+        iob = IOBuffer()
+        seek_in_track_print(iob, Meta.parse(string(returnkey)))
+        take!(iob)
         # Allow a little time for player to be updated with the actual progress.
         sleep(0.5)
         st = get_player_state(ioc)
@@ -264,11 +264,11 @@ julia> filter(:trackname => n -> contains(uppercase(n), " LOVE "), TDF[])[!, :tr
 end
 
 """
-    current_artist_and_tracks_in_data_print(ioc)
+    current_artists_tracks_request_play_in_context_print(ioc)
 
 key: 'm'
 """
-function current_artist_and_tracks_in_data_print(ioc)
+function current_artists_tracks_request_play_in_context_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     if isnothing(st.item)
@@ -276,7 +276,8 @@ function current_artist_and_tracks_in_data_print(ioc)
         print(io, "No current item.")
         color_set(ioc)
     else
-        artist_and_tracks_in_data_print(ioc, st.item)
+        println(ioc)
+        artists_tracks_request_play_in_context_print(ioc, st.item)
     end
 end
 
@@ -316,7 +317,6 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "")
         color_set(ioc)
         return false
     end
-    # CONSIDER: can this be generalized?
     if f == abnormality
         rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
         histograms_plot(ioc, rpd)

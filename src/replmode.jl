@@ -44,6 +44,9 @@ const IO_DICT = Dict(:context_color => :green, :print_ids => false, :silent => f
 "Remember last selection for single keystroke access later"
 const PREVIOUS_FEATURE_SELECTION = Ref{Union{Symbol, Nothing}}(nothing)
 
+"Remember last output, e.g. a vector of track ids"
+const PREVIOUS_RESULT = Ref{Any}(nothing)
+
 "Call the function selected by keystroke with an IOContext. Then print current state."
 function act_on_keystroke(char)
     # Most calls from here on
@@ -95,7 +98,7 @@ function act_on_keystroke(char)
         color_set(ioc)
     elseif c == 'm'
         io = color_set(ioc, :yellow)
-        current_artist_and_tracks_in_data_print(io)
+        current_artists_tracks_request_play_in_context_print(io)
         color_set(ioc)
     elseif c == 't'
         io = color_set(ioc, :normal)
@@ -166,11 +169,14 @@ end
 function exit_mini_to_julia_prompt(state::LineEdit.MIState, repl::LineEditREPL, char::AbstractString)
     # Other mode changes require start of line. We want immediate exit.
     PREVIOUS_FEATURE_SELECTION[] = nothing
+    #@eval Main anss = PREVIOUS_RESULT[]
     iobuffer = LineEdit.buffer(state)
     LineEdit.transition(state, repl.interface.modes[1]) do
         # Type of LineEdit.PromptState
         prompt_state = LineEdit.state(state, PLAYERprompt[])
         prompt_state.input_buffer = copy(iobuffer)
+        #println(stdout)
+        #println(stdout, "Last result, where relevant, is stored in variable `anss`")
     end
 end
 
