@@ -116,6 +116,65 @@ function track_also_in_playlists_print(ioc, track_id, otherthan::JSON3.Object)
 end
 
 
+"""
+    current_playlist_ranked_select_print(f, ioc)
+
+   `f` is a function that takes the argument playlist_tracks_data::DataFrame
+        and returns a vector of Float64. Example: `abnormality`.
+    `func_name` can be passed as a keyword argument. Use this for anonymous functions.
+"""
+function current_playlist_ranked_select_print(f, ioc; func_name = "", alphabetically = false)
+    st = get_player_state(ioc)
+    isempty(st) && return false
+    isnothing(st.item) && return false
+    if st.currently_playing_type !== "track"
+        io = color_set(ioc, :red)
+        print(io, "Not currently playing a track.")
+        color_set(ioc)
+        return false
+    end
+    track_id = SpTrackId(st.item.uri)
+    if isnothing(st.context) || st.context.type !== "playlist"
+        io = color_set(ioc, :red)
+        println(io, "Player context is not a playlist; cant find audio statistics.")
+        color_set(ioc)
+        return false
+    end
+    playlist_ref, playlist_data = playlist_get_latest_ref_and_data(st.context)
+    track_data = subset(playlist_data, :trackid => ByRow(==(track_id)))
+    if isempty(track_data)
+        io = color_set(ioc, :red)
+        if nrow(playlist_data) > 99
+            println(io, "This playlist has > 100 tracks. Retrieving current track data not implemented.")
+        else
+            println(io, "Past end of playlist, in 'recommendations'.")
+        end
+        color_set(ioc)
+        return false
+    end
+    if ! alphabetically
+        if f == abnormality
+            rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
+            histograms_plot(ioc, rpd)
+            track_abnormality_rank_in_list_print(ioc, rpd)
+        else
+            text = func_name == "" ? string(f) : func_name
+            fvalues = Number.(f(playlist_data))
+            height = 3
+            if track_data ∈ eachrow(playlist_data)
+                i = findfirst( ==(track_data.trackid), eachrow(playlist_data.trackid))
+                track_value = fvalues[i]
+            else
+                track_value = first(f(track_data))
+            end
+            plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
+        end
+    end
+    playlist_ranked_print_play(f, ioc, playlist_data, playlist_ref, track_id; func_name, alphabetically)
+end
+
+
+
 struct ReplPlotData
     playlist_name::String
     track_name::String
@@ -351,16 +410,20 @@ Ask for input: a track number in list to resume playing from.
 # Arguments
 
 `f` is a function that takes the argument playlist_tracks_data::DataFrame
-and returns a vector of Float64. Example: `abnormality`.
- For example, 'danceability', 'popularity' (if that still exists.)
+and returns a vector of Float64. Examples: `abnormality`, 'danceability', 
+'trackname' (if that still exists.)
 """
 function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, playlist_ref,
-     current_track_id; func_name = "")
+     current_track_id; func_name = "", alphabetically = false)
     track_ids = playlist_tracks_data[!,:trackid]
     track_names = playlist_tracks_data[!,:trackname]
     fvalues = f(playlist_tracks_data)
     playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
-    print(color_set(ioc, :light_black), " sorted decreasing by ")
+    if ! alphabetically
+        print(color_set(ioc, :light_black), " sorted decreasing by ")
+    else
+        print(color_set(ioc, :light_black), " sorted alphabetically by ")
+    end
     color_set(ioc, :white)
     if func_name == ""
         print(ioc, f)
@@ -370,7 +433,7 @@ function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, play
     color_set(ioc)
     println(ioc, ":")
     sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_decreasing_values(track_ids, track_names, fvalues)
-    playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id)
+    playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id; alphabetically)
     select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_names)
 end
 
@@ -398,12 +461,16 @@ function sort_playlist_by_decreasing_values(track_ids, track_names, values)
     perm = sortperm(values, rev = true)
     return track_ids[perm], track_names[perm], values[perm]
 end
-function playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names, sorted_values, emphasize_track_id)
+function playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names, sorted_values, emphasize_track_id; alphabetically = false)
     n = length(sorted_track_ids)
     for i in 1:n
         print(ioc, lpad(sorted_track_names[i], 81))
         print(ioc, "  ")
-        print(ioc, lpad(round(sorted_values[i]; digits = 3), 5))
+        if ! alphabetically
+            print(ioc, lpad(round(sorted_values[i]; digits = 3), 5))
+        else
+            print(ioc, "     ")
+        end
         print(ioc, lpad(ordinal_string(i, n), 12))
         if sorted_track_ids[i] == emphasize_track_id
              print(ioc, " ←")

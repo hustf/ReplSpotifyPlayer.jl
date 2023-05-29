@@ -14,7 +14,6 @@ function is_playlist_snapshot_in_data(trackrefs_rw::DataFrameRow, pl_ref::Playli
 end
 is_playlist_snapshot_in_data(playlistref) = is_playlist_snapshot_in_data(tracks_data_update(), playlistref)
 
-
 is_playlist_in_data(tracks_data::DataFrame, pl_ref::PlaylistRef) = is_playlist_in_data(tracks_data, pl_ref.id)
 
 is_playlist_in_data(trackrefs_rw::DataFrameRow, pl_ref::PlaylistRef) = is_playlist_in_data(trackrefs_rw, pl_ref.id)
@@ -104,7 +103,13 @@ function playlist_get_latest_ref_and_data(context::JSON3.Object)
     if isempty(playlist_data)
         tracks_data_update(;forceupdate = true)
         playlist_data = playlist_get_stored_audio_data(playlist_ref)
-        @assert ! isempty(playlist_data)
+        if isempty(playlist_data)
+            printstyled(stdout, "\"$(playlist_ref.name)\" is not mirrored in local data. Retrieving online data for this operation....", color = :yellow)
+            playlist_data = DataFrame()
+            tracks_data_append_playlist!(playlist_data, playlist_ref; silent = false)
+            tracks_data_append_audio_features!(playlist_data; silent = false)
+            @assert ! isempty(playlist_data)
+        end
     end
     playlist_ref, playlist_data
 end

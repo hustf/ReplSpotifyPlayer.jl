@@ -90,9 +90,13 @@ function init()
     # like in 'print_and_delete'
     UnicodePlots.truecolors!()
     @info "Type `:` to enter mini player mode, `e` to exit."
+    nothing
 end
 
 function __init__()
+    if lowercase(get(ENV, "SPOTIFY_NOINIT", "false")) !== "true"
+        println("The environment variable SPOTIFY_NOINIT is not set to \"true\". More browser windows than necessary may pop up.")
+    end
     init()
 end
 end # module

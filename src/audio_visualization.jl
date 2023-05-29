@@ -1,3 +1,6 @@
+# This file contains functions used internally by repl_player.jl, the user facing functions.
+# Plotting functions which adjust to current terminal width
+# and with time normalized to 0..10.
 
 function plot_audio(ioc, track_id) 
     json, waitsec = tracks_get_audio_analysis(track_id)
@@ -108,8 +111,8 @@ function plot_audio_sections_as_line(ioc, sections, property::Symbol, title; hei
     end
     replace!(v, 0 => NaN)
     if property == :tempo
-        mi = round(minimum(v), digits = 1)
-        ma = round(maximum(v), digits = 1)
+        mi = round(minimum(filter(! isnan, v)), digits = 1)
+        ma = round(maximum(filter(! isnan, v)), digits = 1)
         title *= " ($mi - $ma)"
     end
     plot_as_line_stretched_to_width(ioc, t, v, title; height)

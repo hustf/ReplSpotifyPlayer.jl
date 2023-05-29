@@ -281,55 +281,6 @@ function current_artists_tracks_request_play_in_context_print(ioc)
     end
 end
 
-"""
-    current_playlist_ranked_select_print(f, ioc)
-
-   `f` is a function that takes the argument playlist_tracks_data::DataFrame
-        and returns a vector of Float64. Example: `abnormality`.
-    `func_name` can be passed as a keyword argument. Use this for anonymous functions.
-"""
-function current_playlist_ranked_select_print(f, ioc; func_name = "")
-    st = get_player_state(ioc)
-    isempty(st) && return false
-    isnothing(st.item) && return false
-    if st.currently_playing_type !== "track"
-        io = color_set(ioc, :red)
-        print(io, "Not currently playing a track.")
-        color_set(ioc)
-        return false
-    end
-    track_id = SpTrackId(st.item.uri)
-    if isnothing(st.context) || st.context.type !== "playlist"
-        io = color_set(ioc, :red)
-        println(io, "Player context is not a playlist; cant find audio statistics.")
-        color_set(ioc)
-        return false
-    end
-    playlist_ref, playlist_data = playlist_get_latest_ref_and_data(st.context)
-    track_data = subset(playlist_data, :trackid => ByRow(==(track_id)))
-    if isempty(track_data)
-        io = color_set(ioc, :red)
-        if nrow(playlist_data) > 99
-            println(io, "This playlist has > 100 tracks. Retrieving current track data not implemented.")
-        else
-            println(io, "Past end of playlist, in 'recommendations'.")
-        end
-        color_set(ioc)
-        return false
-    end
-    if f == abnormality
-        rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
-        histograms_plot(ioc, rpd)
-        track_abnormality_rank_in_list_print(ioc, rpd)
-    else
-        text = func_name == "" ? string(f) : func_name
-        fvalues = Number.(f(playlist_data))
-        height = 3
-        track_value = first(f(track_data))
-        plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
-    end
-    playlist_ranked_print_play(f, ioc, playlist_data, playlist_ref, track_id; func_name)
-end
 
 """
     sort_playlist_other_select_print(ioc; pre_selection = nothing)
@@ -343,10 +294,11 @@ key: 'o' or 't'
 """
 function sort_playlist_other_select_print(ioc; pre_selection = nothing)
     if isnothing(pre_selection)
+        println(ioc, "\nTrack feature select")
         # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
-        println(ioc, "Track feature select")
         vs = wanted_feature_keys()
-        rng = 1:length(wanted_feature_keys())
+        push!(vs, :trackname)
+        rng = 1:length(vs)
         for (i, s) in enumerate(vs)
             println("  ", lpad(i, 3), "  ", s)
         end
@@ -360,15 +312,21 @@ function sort_playlist_other_select_print(ioc; pre_selection = nothing)
     else
         picked_key = pre_selection
     end
-    if picked_key != :abnormality
-        # Capture picked_key in this function that we pass on:
-        function f(playlist_tracks_data)
-            tr_af = playlist_tracks_data[!, picked_key]
-            collect(tr_af)
-        end
-        current_playlist_ranked_select_print(f, ioc; func_name = "$(picked_key)")
-    else
+    if picked_key == :abnormality
         current_playlist_ranked_select_print(abnormality, ioc)
+    elseif picked_key ∈ wanted_feature_keys()
+        current_playlist_ranked_select_print(ioc; func_name = "$(picked_key)") do playlist_tracks_data
+            collect(playlist_tracks_data[!, picked_key])
+        end
+    else
+        current_playlist_ranked_select_print(ioc; func_name = "$(picked_key)", alphabetically = true) do playlist_tracks_data
+            # An unsorted vector
+            v = playlist_tracks_data[!, picked_key]
+            # The sequence of indexes that would sort v
+            p = sortperm(v; rev = true)
+            # The sorted position for each element in v
+            map( i-> findfirst(==(i), p), 1:length(v))
+        end
     end
     picked_key
 end
