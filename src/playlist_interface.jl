@@ -286,11 +286,15 @@ wanted_feature_keys() = [:danceability, :key, :valence, :speechiness, :duration_
 wanted_feature_pair(p) = p[1] ∈ wanted_feature_keys()
 
 
-"playlist_details_print(playlist_id::SpPlaylistId)"
+"""
+    playlist_details_print(playlist_id::SpPlaylistId)
+    playlist_details_print(ioc, playlist_id::SpPlaylistId, tracks_data)
+
+This is rather slow because 'details' include fetching the online only description.
+"""
 function playlist_details_print(ioc, playlist_id::SpPlaylistId)
     playlist_details_print(ioc, playlist_id, tracks_data_update())
 end
-"playlist_details_print(playlist_id::SpPlaylistId)"
 function playlist_details_print(ioc, playlist_id::SpPlaylistId, tracks_data)
     pld = Spotify.Playlists.playlist_get(playlist_id; market = "")[1]
     if isempty(pld)

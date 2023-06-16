@@ -1,5 +1,5 @@
 using Test
-using ReplSpotifyPlayer
+push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 using ReplSpotifyPlayer: tracks_get_audio_analysis, plot_audio_sections, plot_audio_segments, plot_audio
 using ReplSpotifyPlayer: get_player_state, stretch_string_to_length
 using UnicodePlots

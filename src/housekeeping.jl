@@ -4,11 +4,20 @@ function housekeeping_print(ioc, tracks_data::DataFrame)
     # Step 0: Check for corrupted data
     problem_track_ids = filter(pa-> pa[2] > 1, countmap(tracks_data.trackid))
     if ! isempty(problem_track_ids)
-        msg = "The local tracks data contain duplicate track ids. You may want to manually edit or delete entirely the file \n $(fullpath_trackrefs())\n"
-        msg *= "The repeated track ids are $problem_track_ids\n"
+        for track_id in keys(problem_track_ids)
+            io = color_set(IOContext(stdout, :print_ids => true), :yellow)
+            print(io, "\nDuplicate track found in track data. Duplicates may cause corruption of the local data file.")
+            for rw in eachrow(filter(:trackid => ==(track_id), tracks_data))
+                enumerated_track_album_artist_context_print(io, rw)
+                println(ioc)
+            end
+        end
+        color_set(ioc)
+        msg = "The local tracks data contain duplicate track ids, likely because\n"
+        msg *= "some playlists contain duplicate tracks. Fix this manually in the Spotify app!\n"
         msg *= "Exiting housekeeping."
         @warn msg
-        nothing
+        return nothing
     end
     # Step 1
     clones_data = tracks_with_clones_data(tracks_data)
@@ -177,6 +186,7 @@ function suggest_and_make_compilation_tracks_to_albums_changes_print(ioc, tracks
     # no more questions need be asked.
     user_input = 'n'
     for (i, track_in_compilation_data) in enumerate(eachrow(compilations_data))
+        clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
         print(color_set(ioc, :light_black), round(i / nrow(compilations_data), digits = 2), " ")
         color_set(ioc)
         user_input = suggest_and_make_compilation_to_album_change_print(ioc, user_input, track_in_compilation_data, tracks_data)
@@ -251,7 +261,11 @@ function make_single_replacement_with_permission_print(ioc, user_input, du::Data
         end
     end
     if user_input ∉ "YN"
-        user_input = pick_ynYNp_and_print(ioc, 'n', first(plrefs_v), dv.trackid)
+        if  ! isempty(plrefs_v)
+            user_input = pick_ynYNp_and_print(ioc, 'n', first(plrefs_v), dv.trackid)
+        else
+            user_input = pick_ynYNp_and_print(ioc, 'n', plrefs_v, dv.trackid)
+        end
     end
     color_set(ioc)
     if user_input ∈ "Yy"

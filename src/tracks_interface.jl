@@ -1,4 +1,23 @@
 # This file wraps functions from Spotify.jl.
+# Also prints tracks.
+
+"""
+    track_no_details_print(ioc, rw::DataFrameRow)
+    track_no_details_print(ioc, track_name, track_id::SpTrackId)
+"""
+track_no_details_print(ioc, rw::DataFrameRow) = track_no_details_print(ioc, rw[:trackname], rw[:trackid])
+function track_no_details_print(ioc, track_name, track_id::SpTrackId)
+    # TEMP sort of matching :176 which is defined for SpTrackId
+    print(color_set(ioc, 183), track_name)
+    color_set(ioc)
+    if get(ioc, :print_ids, false)
+        print(ioc, "  ")
+        show(ioc, MIME("text/plain"), track_id)
+        color_set(ioc)
+    end
+end
+
+
 """
     get_audio_features_dic(trackid)
     ---> Dict

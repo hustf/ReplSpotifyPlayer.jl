@@ -1,5 +1,5 @@
 using Test
-using ReplSpotifyPlayer
+push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 using ReplSpotifyPlayer: color_set, housekeeping_print, tracks_data_update
 using ReplSpotifyPlayer: tracks_with_clones_data, nrow, prefer_adjacent_clone_over_current
 using ReplSpotifyPlayer: suggest_and_make_compilation_to_album_change_print

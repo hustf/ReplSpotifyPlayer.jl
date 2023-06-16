@@ -1,8 +1,15 @@
 # This file has the functions called directly from the repl-mode.
 # After some context checking, most work is done by sub-callees.
 # Just a few of these have something interesting to return, like
-# e.g. what was selected. Output is to the REPL, to the Spotify
+# e.g. what was selected. The return values are not currently used,
+# but the constant PREVIOUS_RESULT is defined for possible
+# future extension using returned values.
+#
+# Output is actually to the REPL, to the Spotify
 # player, and to the local dataframe.
+#
+# Functions that are expected to print something (colored)
+# (to the repl / io context ) end in _print.
 
 """
     current_playing_print() ---> Bool
@@ -161,8 +168,12 @@ function current_audio_features_print(ioc)
         color_set(ioc)
         return false
     end
+    color_set(ioc)
+    println(color_set(ioc, :bold), "\nAudio features of track")
+    #
     track_id = SpTrackId(st.item.uri)
     af = tracks_get_stored_or_api_audio_features(track_id)
+    color_set(ioc, :light_black)
     if ! isempty(af)
         println(ioc,  rpad("acousticness     $(af[:acousticness])", 25)     * rpad("key               $(af[:key])", 25))
         println(ioc,  rpad("speechiness      $(af[:speechiness])", 25)      * rpad("mode              $(af[:mode])", 25))
@@ -173,6 +184,12 @@ function current_audio_features_print(ioc)
         println(ioc,  "danceability     $( af[:danceability])")
         println(ioc,  "valence          $( af[:valence])")
     end
+    color_set(ioc)
+    println(color_set(ioc, :bold), "\nAudio features over time (0-10), seek only mode")
+    menu = """
+    ¨¨0-9 : seek.     ⏎ / space : exit seek mode.   
+    """
+    print(ioc, characters_to_ansi_escape_sequence(menu))
     json, waitsec = tracks_get_audio_analysis(track_id)
     # Mark the current time at once, so we can calculate a current progress later.
     t_0 = time()
@@ -234,21 +251,62 @@ key: '?'
 """
 function help_seek_syntax_print(ioc)
     mymd = md"""
+\
 
-Exit the replmode by pressing 'e' or 'backspace'.
+## Basic use of the menu (replmode)
 
-Find track ids, artist ids, album ids, playlist ids by pressing 'i' and then 'c'. The context
-you are in is what kind of list you are currently playing from in Spotify's app.
+Bring up the menu mode with ':'. Exit it by pressing 'e' or 'backspace'. 
+
+You ought to have the Spotify app running on some device. If you
+are playing a track, pressing 'space' will (re)display 
+
+    `track name` \ 'album name` \ `artist`
+
+Pressing '⏎' additionaly prints the menu.
+
+Spotify's own app is better suited to navigating  **contexts**: 
+
+    - playlist
+    - album 
+    - artist
+
+If you are playing from a playlist, hitting 'c' for context will
+display other info than it will for an album or artist. 
+
+The menu is suitable for isolating the most popular or least typical
+track within a context. Play around, then go on to prune your own playlists. 
+
+
+## 'Advanced' use
+
+Hit 'i' to toggle display of Spotify codes like TrackId, PlaylistId, AlbumId and ArtistId.
+
+These can be copied and pasted either into Spotify's search box (not really recommended),
+or into your own calls, run from the REPL. There's an example just below.
 
 ## Save typing with shorthand single-argument functions:
 
 ```julia-repl
-julia> playtracks(x) = begin;Player.player_resume_playback(;uris = x);println(length(x));end
+julia> push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer: Player
+
+julia> playtracks(x) = begin;player_resume_playback(;uris = x);println(length(x));end
+playtracks (generic function with 1 method)
+
+julia> ["spotify:track:3vL9lPWBuv0ZR3c5YmdhDl", "spotify:track:3KivuyfbGxxXQwH5hJmlmA"] |> playtracks
+2
 ```
 
-(`playtracks` is already defined and exported by this module.)
+(`playtracks` is actually already defined and exported by this module.)
 
-# Examples
+As you'll notice, a tracks DataFrame with info on your own playlists is stored locally.
+You can inspect it by typing 
+
+```
+julia> TDF[]
+```
+
+
+# Example
 
 Seek for " love " in the Tracks DataFrame TDF[] and play all results.
 
@@ -293,17 +351,23 @@ end
 key: 'o' or 't'
 """
 function sort_playlist_other_select_print(ioc; pre_selection = nothing)
+    # Consider TODO: Add a variant of typicality: List by similarity to the current track.
     if isnothing(pre_selection)
         println(ioc, "\nTrack feature select")
         # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
         vs = wanted_feature_keys()
         push!(vs, :trackname)
+        push!(vs, :popularity)
         rng = 1:length(vs)
         for (i, s) in enumerate(vs)
             println("  ", lpad(i, 3), "  ", s)
         end
         io = color_set(ioc, :176)
-        print(io, "Type feature number ∈ $rng to sort playlist by! Press enter to do nothing: ")
+        print(io, "Type feature number ∈ ")
+        print(color_set(ioc), "$rng")
+        print(color_set(io), "  to sort tracks in context by! Press ")
+        print(color_set(ioc), " ⏎ ")
+        print(color_set(io), " to do nothing: ")
         inpno = read_number_from_keyboard(rng)
         println(io)
         color_set(ioc)
@@ -313,13 +377,13 @@ function sort_playlist_other_select_print(ioc; pre_selection = nothing)
         picked_key = pre_selection
     end
     if picked_key == :abnormality
-        current_playlist_ranked_select_print(abnormality, ioc)
-    elseif picked_key ∈ wanted_feature_keys()
-        current_playlist_ranked_select_print(ioc; func_name = "$(picked_key)") do playlist_tracks_data
+        current_context_ranked_select_print(abnormality, ioc)
+    elseif picked_key ∈ wanted_feature_keys() || picked_key == :popularity
+        current_context_ranked_select_print(ioc; func_name = "$(picked_key)") do playlist_tracks_data
             collect(playlist_tracks_data[!, picked_key])
         end
     else
-        current_playlist_ranked_select_print(ioc; func_name = "$(picked_key)", alphabetically = true) do playlist_tracks_data
+        current_context_ranked_select_print(ioc; func_name = "$(picked_key)", alphabetically = true) do playlist_tracks_data
             # An unsorted vector
             v = playlist_tracks_data[!, picked_key]
             # The sequence of indexes that would sort v
@@ -360,6 +424,10 @@ end
 """
     current_genres_print() ---> Bool
 
+The same info is also shown along with showing the musician.
+However, this menu choice does not bring up the tracks from
+this musician.
+
 key: 'g'
 """
 function current_genres_print(ioc)
@@ -375,4 +443,16 @@ function current_genres_print(ioc)
     end
     println(ioc)
     true
+end
+
+"""
+    search_then_select_print() ---> Bool
+
+Not context sensitive, only searches local tracks.
+
+key: 's'
+"""
+function search_then_select_print(ioc)
+    tracks_data = tracks_data_update()
+    search_then_select_print(ioc, tracks_data)
 end

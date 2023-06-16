@@ -1,5 +1,5 @@
 using Test
-using ReplSpotifyPlayer
+push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 using ReplSpotifyPlayer: flatten, select, artist_details_print, artist_tracks_in_playlists_print, color_set
 using ReplSpotifyPlayer: ncol, nrow, delete_the_last_and_missing_playlistref_columns!
 using ReplSpotifyPlayer: flatten_horizontally_vector, unflatten_horizontally_vector, ByRow

@@ -1,5 +1,5 @@
 using Test
-using ReplSpotifyPlayer
+push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 using ReplSpotifyPlayer: TDF, SpTrackId, SpPlaylistId, tracks_data_append_playlist!, subset
 using ReplSpotifyPlayer: save_tracks_data, load_tracks_data, playlist_owned_dataframe_get
 using ReplSpotifyPlayer: ncol, flatten
@@ -7,7 +7,20 @@ import ReplSpotifyPlayer: InlineStrings
 using ReplSpotifyPlayer: groupby, combine, transform, nrow, select!, Not
 using ReplSpotifyPlayer: flatten_horizontally_vector, names, unflatten_horizontally_vector
 using ReplSpotifyPlayer: tracks_namedtuple_from_playlist, tracks_data_append_namedtuple_from_playlist!
-using ReplSpotifyPlayer: delete_the_last_and_missing_playlistref_columns!
+using ReplSpotifyPlayer: delete_the_last_and_missing_playlistref_columns!, countmap
+
+##############################
+# tracks_data_append_playlist!
+##############################
+pl_id = SpPlaylistId("3FyJWXqFocKq2SYGjGoelU")
+nt_playlist = tracks_namedtuple_from_playlist(pl_id)
+problem_track_ids = filter(pa-> pa[2] > 1, countmap(nt_playlist.trackid))
+filter(pa-> pa[2] > 1, countmap(nt_playlist.trackname))
+
+#
+#
+#
+
 
 @test !isempty(TDF[])
 

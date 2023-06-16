@@ -132,8 +132,8 @@ function tracks_data_append!(tracks_data, playlistrefs_df; silent = true)
         if ! is_playlist_snapshot_in_data(tracks_data, pl_ref)
             # Add latest version
             ! silent && print(stdout, x.name, "    ")
-            tracks_data_append_playlist!(tracks_data, pl_ref)
-            @assert !isempty(tracks_data)
+            tracks_data_append_playlist!(tracks_data, pl_ref; silent)
+            @assert !isempty(tracks_data) pl_ref
         else
             # Already up to date
             ! silent && printstyled(stdout, pl_ref.name * "  ",  color = :light_black)
@@ -149,11 +149,13 @@ end
 
 # Arguments
 
-- tracks_data    Each row describes a track and playlist references. Taken from TDF[].
+- tracks_data    Each row describes a track and playlist references.
 - pl_ref      Playlist reference to add tracks from
 - silent    Repl feedback
 """
 function tracks_data_append_playlist!(tracks_data::DataFrame, pl_ref::PlaylistRef; silent = true)
+    # We allow track duplicates within a playlist, but provide 'housekeeping' functionality to 
+    # get rid of those through the menus.
     nt_playlist = tracks_namedtuple_from_playlist(pl_ref.id)
     tracks_data_append_namedtuple_from_playlist!(tracks_data, pl_ref, nt_playlist; silent) # 0.000115s (600+ tracks)
     @assert !isempty(tracks_data)
@@ -166,7 +168,7 @@ end
 
 # Arguments
 
-- tracks_data    Each row describes a track and playlist references. Taken from TDF[].
+- tracks_data    Each row describes a track and playlist references. 
 - pl_ref         Playlist reference for admixture.
 - nt_playlist    column names and vectors of data
 - silent         Repl feedback
@@ -189,7 +191,15 @@ function tracks_data_append_namedtuple_from_playlist!(tracks_data::DataFrame, pl
                 id = rw[:trackid]
                 r = findfirst(rid -> id == rid, view(tracks_data, :, :trackid))
                 if is_playlist_snapshot_in_data(view(tracks_data, r, :), pl_ref) # 1.9μs
-                    ! silent && println(stdout, "Duplicate track '", rw[:trackname], "' in playlist '", pl_ref.name, "'")
+                    if ! silent
+                        ioc = color_set(IOContext(stdout, :print_ids => true), :yellow)
+                        print(ioc, "\nDuplicate track found in playlist. This may cause corruption in the local data file. Fix it manually in the Spotify app!\n")
+                        print(ioc, "\nThis playlist is not added to local tracks data for now.\n")
+                        enumerated_track_album_artist_context_print(ioc, rw)
+                        color_set(stdout)
+                        println(stdout)
+                        return tracks_data
+                    end
                 else
                     # Add this playlistref as a new column. In other rows, a 'missing' may be added to fill in.
                     colprev = ncol(tracks_data)
@@ -236,7 +246,7 @@ function tracks_data_append_audio_features!(tracks_data; silent = true)
         insert_audio_feature_vals!(trackrefs_rw)
         if mod(i, 10) == 1
             if ! silent
-                REPL.Terminals.clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
+                clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
                 print(stdout, "   ", round(i / nr; digits = 2))
                 sleep(0.001)
             end

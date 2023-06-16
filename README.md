@@ -40,7 +40,7 @@ You can also maintain your playlists in new ways:
 
 julia> dev Spotify.jl  # Check that you have the 'master' version. 
 
-julia> using ReplSpotifyPlayer
+julia> push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 
 julia> # Press ':'
 

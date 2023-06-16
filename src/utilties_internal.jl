@@ -1,42 +1,30 @@
-# This file contains functions used internally by repl_player.jl (the user-facing functions).
-# These are second-tier, not called directly by keypresses, rather indirect.
-# They do not fit neatly in player_interface or playlist_interface.
-# They are not supposed to be interesting to call from without the special replmode.
+# This file contains smallish functions used internally by repl_player.jl (the user-facing functions).
+# These are second-tier, not called directly by keypresses, rather indirect via repl_player.jl.
+# Functions of some length or clearly belonging to a category is moved to separate files.
 
-"track_album_artists_print(ioc, item::JSON3.Object)"
+# Functions are not supposed to be interesting to call from without the special replmode.
+
+"""
+    track_album_artists_print(ioc, item::JSON3.Object)
+    track_album_artists_print(ioc, rw::DataFrameRow)
+"""
 function track_album_artists_print(ioc, item::JSON3.Object)
-    print(ioc, item.name, " \\ ", item.album.name)
-    if get(ioc, :print_date, false)
-        print(ioc, " {", item.album.release_date, "}")
-    end
+    color_set(ioc)
+    track_no_details_print(ioc, item.name, SpTrackId(item.id))
+    print(ioc, " \\ ")
+    album_no_details_print(ioc, item.album.name, item.album.release_date, SpAlbumId(item.album.id))
+    print(ioc, " \\ ")
     ars = item.artists
-    vs = [ar.name for ar in ars]
-    print(ioc, " \\ ", join(vs, " & "))
-    if get(ioc, :print_ids, false)
-        track_id = SpTrackId(item.id)
-        print(ioc, "  ")
-        show(ioc, MIME("text/plain"), track_id)
-        color_set(ioc)
-    end
+    artist_no_details_print(ioc, [ar.name for ar in ars], [ar.id for ar in ars])
+    color_set(ioc)
     nothing
 end
-
-"track_album_artists_print(ioc, DataFrameRow)"
-function track_album_artists_print(ioc, row::DataFrameRow)
-    print(ioc, row.trackname, " \\ ", row.album_name)
-    if get(ioc, :print_date, false)
-        if hasproperty(row, :release_date)
-            print(ioc, " {", row.release_date, "}")
-        end
-    end
-    ars = row.artists
-    print(ioc, " \\ ", join(ars, " & "))
-    if get(ioc, :print_ids, false)
-        track_id = SpTrackId(row.trackid)
-        print(ioc, "  ")
-        show(ioc, MIME("text/plain"), track_id)
-        color_set(ioc)
-    end
+function track_album_artists_print(ioc, rw::DataFrameRow)
+    track_no_details_print(ioc, rw)
+    print(ioc, " \\ ")
+    album_no_details_print(ioc, rw)
+    print(ioc, " \\ ")
+    artist_no_details_print(ioc, rw)
     nothing
 end
 
@@ -61,23 +49,26 @@ function genres_print(ioc, item::JSON3.Object)
         gen = String.(artobj.genres)
         if ! isempty(artobj.genres)
             genres_print(ioc, gen)
+        else
+            print(color_set(ioc, :red), " Genres unknown for this artist")
         end
         println(ioc)
     end
     nothing
 end
 function genres_print(ioc, gen::Vector{String})
+    io = color_set(ioc, :normal)
     if !isempty(gen)
         for g in gen
-            print(ioc, " ")
-            io = color_set(ioc, :reverse)
+            print(io, " ")
+            io = color_set(io, :reverse)
             print(io, g)
-            print(io, text_colors[:normal])
-            color_set(ioc)
+            color_set(io, :normal)
         end
     else
         print(color_set(ioc, :red), " Genres unknown for this artist")
     end
+    color_set(ioc)
 end
 
 "track_in_playlists_print(ioc, track_id) ---> Bool"
@@ -117,13 +108,13 @@ end
 
 
 """
-    current_playlist_ranked_select_print(f, ioc)
+    current_context_ranked_select_print(f, ioc)
 
-   `f` is a function that takes the argument playlist_tracks_data::DataFrame
+   `f` is a function that takes the argument context_tracks_data::DataFrame
         and returns a vector of Float64. Example: `abnormality`.
     `func_name` can be passed as a keyword argument. Use this for anonymous functions.
 """
-function current_playlist_ranked_select_print(f, ioc; func_name = "", alphabetically = false)
+function current_context_ranked_select_print(f, ioc; func_name = "", alphabetically = false)
     st = get_player_state(ioc)
     isempty(st) && return false
     isnothing(st.item) && return false
@@ -134,35 +125,39 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "", alphabetic
         return false
     end
     track_id = SpTrackId(st.item.uri)
-    if isnothing(st.context) || st.context.type !== "playlist"
+    if isnothing(st.context) || st.context.type == "artist"
         io = color_set(ioc, :red)
-        println(io, "Player context is not a playlist; cant find audio statistics.")
+        println(io, "Player context is not a playlist or album; cant find context track data.")
         color_set(ioc)
         return false
     end
-    playlist_ref, playlist_data = playlist_get_latest_ref_and_data(st.context)
-    track_data = subset(playlist_data, :trackid => ByRow(==(track_id)))
-    if isempty(track_data)
-        io = color_set(ioc, :red)
-        if nrow(playlist_data) > 99
-            println(io, "This playlist has > 100 tracks. Retrieving current track data not implemented.")
-        else
-            println(io, "Past end of playlist, in 'recommendations'.")
+    if st.context.type == "playlist"
+        context_typed_ref, context_tracks_data = playlist_get_latest_ref_and_data(st.context)
+        if func_name == "popularity"
+            # We do not store 'popularity' in the local playlist track data file
+            # because it can vary quickly with time. But it can be interesting, so 
+            # let's add it temporarily here.
+            o = get_multiple_tracks(context_tracks_data.trackid)
+            @assert length(o) == nrow(context_tracks_data)
+            vpop = map(i -> i.popularity , o)
+            context_tracks_data.popularity = vpop
         end
-        color_set(ioc)
-        return false
+    else
+        context_typed_ref, context_tracks_data = album_get_id_and_data(st.context)
     end
+    track_data = subset(context_tracks_data, :trackid => ByRow(==(track_id)))
+    @assert ! isempty(track_data)
     if ! alphabetically
         if f == abnormality
-            rpd = build_histogram_data(track_data, playlist_ref, playlist_data)
+            rpd = build_histogram_data(track_data, context_typed_ref, context_tracks_data)
             histograms_plot(ioc, rpd)
             track_abnormality_rank_in_list_print(ioc, rpd)
         else
             text = func_name == "" ? string(f) : func_name
-            fvalues = Number.(f(playlist_data))
+            fvalues = Number.(f(context_tracks_data))
             height = 3
-            if track_data ∈ eachrow(playlist_data)
-                i = findfirst( ==(track_data.trackid), eachrow(playlist_data.trackid))
+            if track_data ∈ eachrow(context_tracks_data)
+                i = findfirst( ==(track_data.trackid), eachrow(context_tracks_data.trackid))
                 track_value = fvalues[i]
             else
                 track_value = first(f(track_data))
@@ -170,7 +165,7 @@ function current_playlist_ranked_select_print(f, ioc; func_name = "", alphabetic
             plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
         end
     end
-    playlist_ranked_print_play(f, ioc, playlist_data, playlist_ref, track_id; func_name, alphabetically)
+    context_ranked_print_play(f, ioc, context_tracks_data, context_typed_ref, track_id; func_name, alphabetically)
 end
 
 
@@ -187,15 +182,20 @@ end
 ReplPlotData(;playlist_name = "", track_name = "", height = 3) = ReplPlotData(playlist_name, track_name, height, String[], Vector{Vector{Float64}}(), Float64[], String[])
 
 """
-   build_histogram_data(track_data, playlist_ref, playlist_data) ---> ReplPlotData
+   build_histogram_data(track_data, context_typed_ref, playlist_data) ---> ReplPlotData
 
 Extract and assign the data to a plottable structure.
 """
-function build_histogram_data(track_data, playlist_ref, playlist_data)
+function build_histogram_data(track_data, context_typed_ref, playlist_data)
     playlist_af = select_cols_with_relevant_audio_features(playlist_data)
     track_af = select_cols_with_relevant_audio_features(track_data)
     track_name = track_data[1, :trackname]
-    build_histogram_data(track_name, track_af, playlist_ref.name, playlist_af)
+    if context_typed_ref isa PlaylistRef
+        context_name = context_typed_ref.name
+    elseif context_typed_ref isa SpAlbumId
+        context_name = playlist_data[1, :album_name]
+    end
+    build_histogram_data(track_name, track_af, context_name, playlist_af)
 end
 
 """
@@ -338,8 +338,8 @@ function track_abnormality_rank_in_list_print(ioc, rpd)
     print(io, " has abnormality ")
     printstyled(io, round(abnormality, digits = 3), color=:white)
     color_set(io)
-    print(io, " from mean of playlist ")
-    printstyled(io, rpd.playlist_name, color = :blue)
+    print(io, " from mean of ")
+    printstyled(io, rpd.playlist_name, color = :light_blue)
     color_set(io)
     println(io, ".")
     # Compare with the other tracks
@@ -396,29 +396,35 @@ function ordinal_string(ordinal, setsize)
 end
 
 """
-    playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, playlist_ref,
+    context_ranked_print_play(f::Function, ioc, context_tracks_data, context_typed_ref,
         current_track_id; func_name = "")\\
     ---> true
 
-Calculate f(playlist_tracks_data) for all tracks. Sort by rising
+Calculate f(context_tracks_data) for all tracks in the playlist or album 'context_typed_ref'. Sort by 
 return values.
 
 Print the sorted list, emphasize track_id. For no emphasis, set track_id = nothing.
 
-Ask for input: a track number in list to resume playing from.
+Ask for input: a track number in the list of tracks to resume playing from. Context will not be changed.
 
 # Arguments
 
-`f` is a function that takes the argument playlist_tracks_data::DataFrame
+`f` is a function that takes the argument context_tracks_data::DataFrame
 and returns a vector of Float64. Examples: `abnormality`, 'danceability', 
 'trackname' (if that still exists.)
 """
-function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, playlist_ref,
+function context_ranked_print_play(f::Function, ioc, context_tracks_data, context_typed_ref,
      current_track_id; func_name = "", alphabetically = false)
-    track_ids = playlist_tracks_data[!,:trackid]
-    track_names = playlist_tracks_data[!,:trackname]
-    fvalues = f(playlist_tracks_data)
-    playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
+    track_ids = context_tracks_data[!,:trackid]
+    track_names = context_tracks_data[!,:trackname]
+    fvalues = f(context_tracks_data)
+    if context_typed_ref isa PlaylistRef
+        playlist_no_details_print(color_set(ioc, :blue), context_typed_ref)
+        context_uri = context_typed_ref.id
+    elseif context_typed_ref isa SpAlbumId
+        album_details_print(ioc, context_typed_ref)
+        context_uri = context_typed_ref
+    end
     if ! alphabetically
         print(color_set(ioc, :light_black), " sorted decreasing by ")
     else
@@ -432,13 +438,13 @@ function playlist_ranked_print_play(f::Function, ioc, playlist_tracks_data, play
     end
     color_set(ioc)
     println(ioc, ":")
-    sorted_track_ids, sorted_names, sorted_values = sort_playlist_by_decreasing_values(track_ids, track_names, fvalues)
-    playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id; alphabetically)
-    select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_names)
+    sorted_track_ids, sorted_names, sorted_values = sort_context_tracks_by_decreasing_values(track_ids, track_names, fvalues)
+    context_track_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id; alphabetically)
+    select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_names)
 end
 
-function abnormality(playlist_tracks_data::DataFrame)
-    tr_af = select_cols_with_relevant_audio_features(playlist_tracks_data)
+function abnormality(context_tracks_data::DataFrame)
+    tr_af = select_cols_with_relevant_audio_features(context_tracks_data)
     # Rearrange from dataframe to nested vector - one vector
     # contains a feature per track.
     audiodata = Vector{Vector{Float64}}()
@@ -456,15 +462,16 @@ function abnormality(playlist_tracks_data::DataFrame)
     end
     abnormalities
 end
-function sort_playlist_by_decreasing_values(track_ids, track_names, values)
+function sort_context_tracks_by_decreasing_values(track_ids, track_names, values)
     @assert length(track_ids) == length(track_names) == length(values)
     perm = sortperm(values, rev = true)
     return track_ids[perm], track_names[perm], values[perm]
 end
-function playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names, sorted_values, emphasize_track_id; alphabetically = false)
+function context_track_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names, sorted_values, emphasize_track_id; alphabetically = false)
     n = length(sorted_track_ids)
     for i in 1:n
-        print(ioc, lpad(sorted_track_names[i], 81))
+        print(color_set(ioc, 183), lpad(sorted_track_names[i], 81))
+        color_set(ioc)
         print(ioc, "  ")
         if ! alphabetically
             print(ioc, lpad(round(sorted_values[i]; digits = 3), 5))
@@ -487,7 +494,8 @@ function playlist_values_ordinal_print(ioc, sorted_track_ids, sorted_track_names
     return sorted_track_ids, sorted_track_names, sorted_values
 end
 
-function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sorted_track_names)
+
+function select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_track_names)
     inpno = input_number_in_range_and_print(ioc, 1:length(sorted_track_ids))
     isnothing(inpno) && return nothing
     track_id = sorted_track_ids[inpno]
@@ -495,20 +503,18 @@ function select_trackno_and_play_print(ioc, playlist_ref, sorted_track_ids, sort
     color_set(ioc)
     io = color_set(ioc, :light_black)
     print(io, "You picked: ")
-    color_set(ioc)
-    print(ioc, "  ", track_name)
-    if get(ioc, :print_ids, false)
-        print(ioc, "  ")
-        show(ioc, MIME("text/plain"), track_id)
-        color_set(ioc)
-    end
+    track_no_details_print(io, track_name, track_id)
     color_set(io)
     print(io, " from ")
-    playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
+    if context_typed_ref isa PlaylistRef
+        playlist_no_details_print(color_set(ioc, :blue), context_typed_ref)
+        context_uri = context_typed_ref.id
+    elseif context_typed_ref isa SpAlbumId
+        album_details_print(ioc, context_typed_ref)
+        context_uri = context_typed_ref
+    end
     println(io)
-    context_uri = playlist_ref.id
     offset = Dict("uri" => track_id)
-
     player_resume_playback(;context_uri, offset)
     # Avoid having the previous track shown in status line...
     sleep(1)
@@ -518,27 +524,22 @@ end
 """
     select_track_context_and_play_print(ioc, artist_track_context_data)
 
-This is called from artists_tracks_request_play_in_context_print.
+This is called from artists_tracks_request_play_in_context_print and others.
 artist_track_context_data has a column pl_refs with exactly one playlist reference per cell.
 """
 function select_track_context_and_play_print(ioc, artist_track_context_data)
     # The tracks and pl_refs in df has already been printed along with a number for selection.
+    color_set(ioc)
     inpno = input_number_in_range_and_print(ioc, 1:nrow(artist_track_context_data))
     isnothing(inpno) && return nothing
     rw = artist_track_context_data[inpno, :]
     track_id = rw.trackid
     track_name = rw.trackname
-    playlist_ref = rw.pl_refs
+    playlist_ref = rw.pl_ref
     color_set(ioc)
     io = color_set(ioc, :light_black)
     print(io, "You picked: ")
-    color_set(ioc)
-    print(ioc, "  ", track_name)
-    if get(ioc, :print_ids, false)
-        print(ioc, "  ")
-        show(ioc, MIME("text/plain"), track_id)
-        color_set(ioc)
-    end
+    track_no_details_print(io, track_name, track_id)
     color_set(io)
     print(io, " from ")
     playlist_no_details_print(color_set(ioc, :blue), playlist_ref)
@@ -552,51 +553,6 @@ function select_track_context_and_play_print(ioc, artist_track_context_data)
 end
 
 
-
-
-
-
-
-
-function input_number_in_range_and_print(ioc, rng)
-    io = color_set(ioc, :176)
-    print(io, "Type number ∈ $rng to play! Press enter to do nothing: ")
-    inpno = read_number_from_keyboard(rng)
-    println(io)
-    color_set(ioc)
-    inpno
-end
-
-"""
-    read_number_from_keyboard(rng)
-    ---> Union{Nothing, Int64}
-
-We can't use readline(stdin) while in our special replmode - that would block.
-
-If this is called from the normal REPL mode, it will be necessary
-to press enter after the number. Only the characters necessary for
-a number in `rng` will be read, and the remaining characters in buffer
-are processed by REPL as usual.
-"""
-function read_number_from_keyboard(rng)
-    remaining_digits = length(string(maximum(rng)))
-    buf = ""
-    print(stdout, repeat('_', remaining_digits))
-    REPL.Terminals.cmove_left(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr), remaining_digits)
-
-    while remaining_digits >= minimum(rng)
-        remaining_digits -= 1
-        c = Char(first(read(stdin, 1)))
-        print(stdout, c)
-        c < '0' && break
-        c > '9' && break
-        buf *= c
-    end
-    inpno = tryparse(Int64, buf)
-    isnothing(inpno) && return nothing
-    inpno ∉ rng && return nothing
-    inpno
-end
 
 function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
     io = color_set(ioc, :176)
@@ -612,7 +568,7 @@ function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
             color_set(ioc)
             context_uri = playlist_ref.id
             offset = Dict("uri" => track_id, "market" => "NO")
-            response = player_resume_playback(;context_uri, offset)
+            player_resume_playback(;context_uri, offset)
             print(ioc, "\n  ")
             sleep(1)
             current_playing_print(ioc)
@@ -623,26 +579,6 @@ function pick_ynYNp_and_print(ioc, default::Char, playlist_ref, track_id)
     uinp
 end
 
-"""
-    read_single_char_from_keyboard(string_allowed_characters, default::Char)
-    ---> Union{Nothing, Char}
-
-We can't use readline(stdin) while in our special replmode - that would block.
-
-If this is called from the normal REPL mode, it will be necessary
-to press enter after the character.
-
-If a character not in string_allowed_characters is pressed, returns default.
-"""
-function read_single_char_from_keyboard(string_allowed_characters, default::Char)
-    c = Char(first(read(stdin, 1)))
-    print(stdout, c)
-    if c ∈ string_allowed_characters
-        c
-    else
-        default
-    end
-end
 
 
 """
@@ -668,11 +604,15 @@ end
 ```
 """
 function characters_to_ansi_escape_sequence(s)
+    l = "-light_black-"# text_colors[:light_black]
+    b = "-bold-" # text_colors[:bold]
+    n = "-normal-"# text_colors[:normal]
     l = text_colors[:light_black]
-    b = text_colors[:bold]
     n = text_colors[:normal]
+    b = n * text_colors[:bold]
     s = replace(s, "¨" => b ,
         ":" =>  "$n$l:",
+        "/" =>  "$n$l/$b",
         "." => ".$n",
         " or" => "$n$l or$n",
         "+" => "$n+",
@@ -772,6 +712,16 @@ function semantic_string(x)
     end
 end
 
+"""
+    semantic_contains(haystack::AbstractString, y::AbstractString)
+
+Return true if haystack contains needle.
+Both arguments are stripped anything but letters and digits,
+and converted to lowercase.
+"""
+function semantic_contains(haystack::AbstractString, needle::AbstractString)
+    contains(semantic_string(haystack), semantic_string(needle))
+end
 
 """
     stretch_string_to_length(s, l)
@@ -809,4 +759,65 @@ function stretch_string_to_length(s, l)
 end
 
 
+"""
+    enumerated_track_album_artist_context_print(ioc, df::DataFrame; enumerator = 1)
+    --> range starting with enumerator, one count per rows in df
+    enumerated_track_album_artist_context_print(ioc, dfrw::DataFrameRow; enumerated::String = "", no_track_album_artist = false)
+"""
+function enumerated_track_album_artist_context_print(ioc, dfrw::DataFrameRow; enumerated::String = "", no_track_album_artist = false)
+    color_set(ioc)
+    if ! no_track_album_artist
+        println(ioc)
+        track_album_artists_print(ioc, dfrw)
+    end
+    # playlist(s)
+    if hasproperty(dfrw, :pl_ref)
+        # One playlist ref in this data
+        print(color_set(ioc), "\n", lpad(enumerated, 7), "    ")
+        playlist_no_details_print(color_set(ioc, :blue), dfrw[:pl_ref])
+    elseif hasproperty(dfrw, :playlistref)
+        # Possibly several playlist refs in this data
+        for c in dfrw[r"playlistref"]
+            ismissing(c) && continue
+            print(color_set(ioc), "\n", lpad(enumerated, 7), "    ")
+            playlist_no_details_print(color_set(ioc, :blue), c)
+        end
+    end
+    color_set(ioc)
+end
+function enumerated_track_album_artist_context_print(ioc, df::DataFrame; enumerator = 1)
+    start = enumerator
+    color_set(ioc)
+    i = 0
+    while i < nrow(df) 
+        enumerated = string(start + i)
+        i += 1
+        if i == 1
+            enumerated_track_album_artist_context_print(ioc, df[i,:]; enumerated)
+        else
+            rwp = df[i - 1, :]
+            rwt = df[i, :]
+            no_track_album_artist = rwp.trackid == rwt.trackid
+            enumerated_track_album_artist_context_print(ioc, df[i,:]; enumerated, no_track_album_artist)
+        end
+    end
+    start:(start + i - 1)
+end
 
+"""
+    enumerated_playlist_print(ioc, playlist_refs, tracks_data; enumerator = 1)
+"""
+function enumerated_playlist_print(ioc, playlist_refs, tracks_data; enumerator = 1)
+    start = enumerator
+    color_set(ioc)
+    println(ioc)
+    i = 0
+    while i < length(playlist_refs)
+        enumerated = string(start + i)
+        i += 1
+        print(color_set(ioc), "\n", lpad(enumerated, 7), "    ")
+        # This is rather slow because 'details' include fetching the online only description.
+        playlist_details_print(color_set(ioc, :blue), playlist_refs[i].id, tracks_data)
+    end
+    start:(start + i - 1)
+end

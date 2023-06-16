@@ -1,4 +1,4 @@
-using ReplSpotifyPlayer
+push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 using Test
 
 @testset "trackrefs_dataframe" begin

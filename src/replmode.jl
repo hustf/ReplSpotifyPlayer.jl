@@ -97,7 +97,7 @@ function act_on_keystroke(char)
         help_seek_syntax_print(io)
         color_set(ioc)
     elseif c == 'm'
-        io = color_set(ioc, :yellow)
+        io = color_set(ioc, :light_green)
         current_artists_tracks_request_play_in_context_print(io)
         color_set(ioc)
     elseif c == 't'
@@ -117,9 +117,15 @@ function act_on_keystroke(char)
         PREVIOUS_FEATURE_SELECTION[] = sort_playlist_other_select_print(io; pre_selection = PREVIOUS_FEATURE_SELECTION[])
         color_set(ioc)
     elseif c == 'g'
-        io = color_set(ioc, :green)
+        io = color_set(ioc, :yellow)
         current_genres_print(io)
         color_set(ioc)
+    elseif c == 's'
+        io = color_set(ioc, :light_green)
+        search_then_select_print(io)
+        color_set(ioc)
+    elseif c == ' '
+        # Pressing space will do nothing special, but current playing will be updated.
     end
     # After the command, a line with the current playing:
     print(ioc, "  ")
@@ -153,9 +159,9 @@ function triggermini(state::LineEdit.MIState, repl::LineEditREPL, char::Abstract
             apply_and_wait_for_implicit_grant(;scopes = Spotify.spotcred().ig_scopes)
         end
         if Spotify.credentials_still_valid()
-            LineEdit.transition(state, PLAYERprompt[]) do
+            LineEdit.transition(state, PLAYERPrompt[]) do
                 # Type of LineEdit.PromptState
-                prompt_state = LineEdit.state(state, PLAYERprompt[])
+                prompt_state = LineEdit.state(state, PLAYERPrompt[])
                 prompt_state.input_buffer = copy(iobuffer)
                 println(stdout)
                 print_menu_and_current_playing()
@@ -173,7 +179,7 @@ function exit_mini_to_julia_prompt(state::LineEdit.MIState, repl::LineEditREPL, 
     iobuffer = LineEdit.buffer(state)
     LineEdit.transition(state, repl.interface.modes[1]) do
         # Type of LineEdit.PromptState
-        prompt_state = LineEdit.state(state, PLAYERprompt[])
+        prompt_state = LineEdit.state(state, PLAYERPrompt[])
         prompt_state.input_buffer = copy(iobuffer)
         #println(stdout)
         #println(stdout, "Last result, where relevant, is stored in variable `anss`")
@@ -225,6 +231,7 @@ function define_single_keystrokes!(special_prompt)
     # Take care to check; some keys won't work.
     let
         d = special_prompt.keymap_dict
+        d[' '] = wrap_command
         d['b'] = wrap_command
         d['f'] = wrap_command
         d['p'] = wrap_command
@@ -237,6 +244,7 @@ function define_single_keystrokes!(special_prompt)
         d['h'] = wrap_command
         d['o'] = wrap_command
         d['g'] = wrap_command
+        d['s'] = wrap_command
         d['0'] = wrap_command
         d['1'] = wrap_command
         d['2'] = wrap_command
@@ -261,10 +269,11 @@ end
 
 function print_menu()
     menu = """
-    ¨e : exit.     ¨f(¨→) : forward.     ¨b(¨←) : back.     ¨p: pause, play.     ¨0-9:  seek.
-    ¨del(¨fn + ¨⌫  ) : delete track from playlist. ¨c : context. ¨m : musician. ¨g : genres.
-    ¨i : toggle ids.       ¨a : audio features.       ¨h : housekeeping.      ¨? : syntax.
+    ¨⌫  / e : exit.  ¨? : help.  ¨⏎ / space : refresh.   ¨f / → : forward.   ¨b / ← : back. 
+    ¨p : pause, play.   ¨0-9 : seek.  ¨c : context.  ¨m : musician.  ¨g : genres.  ¨i : ids. 
+    ¨a : audio display.  ¨s : search.   ¨h : housekeeping.   ¨del / fn + ¨⌫ : delete track. 
     ~Sort then select § ¨t : by typicality.  ¨o : other features.  ¨↑ : previous selection.
     """
+
     print(stdout, characters_to_ansi_escape_sequence(menu))
 end

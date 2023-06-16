@@ -1,13 +1,8 @@
 module ReplSpotifyPlayer
-# We'd like to
-# Lookup trackid ---> playlist_ids
-# Lookup features ---> track_ids
-# Lookup artists ---> track_ids, playlist_ids
-# Statistics for a playlist in terms of audio features and genres
-
 using REPL
 using REPL.LineEdit
 using REPL: LineEditREPL
+using REPL.Terminals: clear_line
 using Base: @kwdef, text_colors #, active_repl
 using Markdown
 using DataFrames
@@ -26,20 +21,11 @@ import Base: tryparse, show, length, iterate
 export Spotify
 export SpId, SpCategoryId, SpPlaylistId, SpAlbumId, SpTrackId
 export SpArtistId
-export Player
-export Albums
-
-#, Spotify.Playlists, Spotify.Tracks, Spotify.Artists
-
-# TODO reconsider exports.
 export JSON3
-export PlaylistRef, authorize, DataFrame
+export PlaylistRef, DataFrame
 export TDF
-export is_playlist_in_data, is_playlist_snapshot_in_data, is_other_playlist_snapshot_in_data
-export is_track_in_data
 export tracks_data_load_and_update, save_tracks_data
 export playtracks
-export artist_get_all_albums
 
 """
 TDF[] to access tracks_data currently in memory. Each row contains a track, features and which playlists refer it.
@@ -47,7 +33,8 @@ TDF[] to access tracks_data currently in memory. Each row contains a track, feat
 The preferred way is `tracks_data_update()`, which is quite fast too, and saves to disk.
 """
 const TDF = Ref{DataFrame}(DataFrame())
-const PLAYERprompt = Ref{LineEdit.Prompt}()
+const PLAYERPrompt = Ref{LineEdit.Prompt}()
+const SEARCHString = Ref{String}("...")
 include("types.jl")
 include("playlist_interface.jl")
 include("player_interface.jl")
@@ -55,7 +42,8 @@ include("library_interface.jl")
 include("artist_interface.jl")
 include("album_interface.jl")
 include("tracks_interface.jl")
-include("utilties_interface.jl")
+include("utilties_internal.jl")
+include("utilties_user_response.jl")
 include("audio_visualization.jl")
 include("search_interface.jl")
 include("tracks_dataframe.jl")
@@ -82,14 +70,14 @@ function init()
     @assert isdefined(Base, :isinteractive)
     @assert Base.isinteractive()
     @assert isdefined(Base, :active_repl)
-    PLAYERprompt[] = add_seventh_prompt_mode(Base.active_repl)
-    define_single_keystrokes!(PLAYERprompt[])
+    PLAYERPrompt[] = add_seventh_prompt_mode(Base.active_repl)
+    define_single_keystrokes!(PLAYERPrompt[])
     # This improves the default when using Windows Terminal.
     # When using VS code, no difference. But note, in VS Code,
     # the terminal may 'blink' when we're using control codes,
     # like in 'print_and_delete'
     UnicodePlots.truecolors!()
-    @info "Type `:` to enter mini player mode, `e` to exit."
+    @info "Type `:` to enter mini player mode, `e` or `⌫ ` to exit."
     nothing
 end
 

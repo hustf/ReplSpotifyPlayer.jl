@@ -1,5 +1,5 @@
 using Test
-using ReplSpotifyPlayer
+push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer
 using ReplSpotifyPlayer: tracks_namedtuple_from_playlist, nrow, ncol, playlist_owned_dataframe_get, subset
 using ReplSpotifyPlayer: is_other_playlist_snapshot_in_data, tracks_data_append_playlist!, select!, propertynames
 using ReplSpotifyPlayer: DataFrameRow, playlist_details_print, color_set, playlist_get_tracks, make_named_tuple_from_json_object

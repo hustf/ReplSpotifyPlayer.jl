@@ -126,8 +126,8 @@ t and v lengths ought to be based on displaysize(ioc)[2]
 function plot_as_line_stretched_to_width(ioc, t, v, title; height = 5)
     nx = size(v, 1)
     if size(v, 2) > 1
-        ymax = round(maximum(v), digits = 2)#Int(ceil(maximum(v)))
-        ymin = Int(floor(minimum(v)))
+        ymax = round(maximum(filter(! isnan, v)), digits = 2)#Int(ceil(maximum(v)))
+        ymin = Int(floor(minimum(filter(! isnan, v))))
         pl = lineplot(t, v; width = nx, height, title, name = repeat([""], size(v, 1)), ylim = (ymin, ymax), padding = 0)
     else
         pl = lineplot(t, v; width = nx, height, title, padding = 0)
@@ -241,7 +241,7 @@ function rhythmic_progress_print(ioc, current_column_no, current_pausetime, curr
         print(ioc, repeat(" ", ccno), "↑")
         print(ioc, beatcount)
         sleep(current_pausetime())
-        REPL.Terminals.clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
+        clear_line(REPL.Terminals.TTYTerminal("", stdin, stdout, stderr))
         ccno = current_column_no()
         cbeno = current_beat_no()
         if cbano !== current_bar_no()
