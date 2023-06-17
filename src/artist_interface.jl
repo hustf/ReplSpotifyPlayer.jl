@@ -24,7 +24,6 @@ function artist_no_details_print(ioc, artists::Vector, artist_ids::Vector)
     end
 end
 function artist_no_details_print(ioc, artist_name, artist_id::SpArtistId)
-    # TEMP sort of matching :light_magenta which is defined for SpArtistId
     print(color_set(ioc, 217), artist_name)
     color_set(ioc)
     if get(ioc, :print_ids, false)
@@ -42,11 +41,11 @@ artist_details_print(ioc, uri::String) = artist_details_print(ioc, SpArtistId(ur
 function artist_details_print(ioc, artist_id)
     o = artist_get(artist_id)[1]
     artist_no_details_print(ioc, o.name, artist_id)
-    io = color_set(ioc, :normal)
-    print(io, "  followers: ", o.followers.total)
+    print(color_set(ioc, :light_black), "  followers: ")
+    print(color_set(ioc, :normal), o.followers.total)
     gen = String.(o.genres)
     if ! isempty(gen)
-        genres_print(io, String.(o.genres))
+        genres_print(ioc, String.(o.genres))
     end
     color_set(ioc)
     # Consider: We might include images through Sixels.
@@ -63,7 +62,7 @@ function artist_tracks_in_playlists_print(ioc, uri::String)
     # Called from current_context_print if the context is an artist.
     artist_id = SpArtistId(uri)
     artist_tracks_in_playlists_print(ioc, artist_id)
-    nothing
+    nothing'm'
 end
 function artist_tracks_in_playlists_print(ioc, artist_id::SpArtistId; enumerator = 1)
     # Called from current_context_print -> artist_tracks_in_playlists_print if the context is an artist.
@@ -75,23 +74,21 @@ function artist_tracks_in_playlists_print(ioc, tracks_data, artist_id; enumerato
     per_artist_data = flatten(tracks_data, [:artists, :artist_ids])
     # Drop other artists.
     artist_data = sort(filter(:artist_ids => ==(artist_id), per_artist_data), :trackname)
+    io = color_set(ioc, :light_black)
     if nrow(artist_data) == 0
-        println(color_set(ioc, :light_black), "\n\tArtist has no tracks in your owned playlist.")
+        println(color_set(ioc), "\n\tArtist has no tracks in your owned playlist.")
         return artist_data
     end
     delete_the_last_and_missing_playlistref_columns!(artist_data)
-    color_set(ioc)
-    artist_name = artist_data[1, :artists]
-    io = color_set(ioc, :yellow)
-    printstyled(io, "  has ", color =:light_black)
+    print(color_set(io), " has ")
     if nrow(artist_data) == 1
-        print(io, " one")
-        printstyled(io, " track ", color = :light_black)
+        print(color_set(io, :normal), " one")
+        print(color_set(io, :light_black), " track ")
     else
-        print(io, " ", nrow(artist_data))
-        printstyled(io, " tracks ", color = :light_black)
+        print(color_set(io, :normal), " ", nrow(artist_data))
+        print(color_set(io, :light_black), " tracks ")
     end
-    printstyled(io, "in your playlists. This is where they are referred:", color = :light_black)
+    print(color_set(io), "in your playlists. This is where they are referred:")
     # Flatten artist_data further, to one row per playlist reference
     transform!(artist_data, r"playlistref"  => ByRow((cells...) -> filter(! ismissing, cells)) => :pl_refs)
     select!(artist_data, Not(r"playlistref"))
@@ -99,8 +96,7 @@ function artist_tracks_in_playlists_print(ioc, tracks_data, artist_id; enumerato
     rename!(artist_track_context_data, :pl_refs => :pl_ref)
     # Print this part
     enumerated_track_album_artist_context_print(ioc, artist_track_context_data; enumerator)
-    println(ioc)
-    color_set(ioc)
+    println(color_set(ioc))
     artist_track_context_data
 end
 
@@ -136,6 +132,6 @@ function artist_tracks_contexts_print(ioc, tracks_data, artist_id; enumerator = 
     color_set(ioc)
     artist_details_print(ioc, artist_id)
     df = artist_tracks_in_playlists_print(ioc, tracks_data, artist_id; enumerator)
-    println(ioc)
+    println(color_set(ioc))
     df
 end

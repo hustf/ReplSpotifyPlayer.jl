@@ -32,7 +32,6 @@ end
 """
 album_no_details_print(ioc, rw::DataFrameRow) = album_no_details_print(ioc, rw[:album_name], rw[:release_date], rw[:album_id])
 function album_no_details_print(ioc, album_name, release_date, album_id::SpAlbumId)
-    # TEMP Sort of matching :light_yellow, which is defined for SpAlbumId.
     print(color_set(ioc, 107), album_name)
     color_set(ioc)
     if get(ioc, :print_date, false)

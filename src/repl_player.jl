@@ -1,10 +1,11 @@
 # This file has the functions called directly from the repl-mode.
 # After some context checking, most work is done by sub-callees.
-# Just a few of these have something interesting to return, like
-# e.g. what was selected. The return values are not currently used,
-# but the constant PREVIOUS_RESULT is defined for possible
-# future extension using returned values.
+# The only function with something interesting to return, are
 #
+# - sort_playlist_other_select_print (`o`)
+# - search_then_select_print         ('s')
+# so that we can store the last user response.
+# 
 # Output is actually to the REPL, to the Spotify
 # player, and to the local dataframe.
 #
@@ -330,8 +331,7 @@ function current_artists_tracks_request_play_in_context_print(ioc)
     st = get_player_state(ioc)
     isempty(st) && return false
     if isnothing(st.item)
-        io = color_set(ioc, :red)
-        print(io, "No current item.")
+        print(color_set(ioc, :red), "No current item.")
         color_set(ioc)
     else
         println(ioc)
@@ -342,6 +342,7 @@ end
 
 """
     sort_playlist_other_select_print(ioc; pre_selection = nothing)
+        --> picked_key
 
 1. Pick criterion function.
 2. Plot distribution of criterion(tracks), with the current track highlighted.
@@ -446,7 +447,7 @@ function current_genres_print(ioc)
 end
 
 """
-    search_then_select_print() ---> Bool
+    search_then_select_print() ---> search string
 
 Not context sensitive, only searches local tracks.
 

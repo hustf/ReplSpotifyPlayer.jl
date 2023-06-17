@@ -149,26 +149,6 @@ function make_named_tuple_from_json_object(o)
     NamedTuple{field_names}(field_values)
 end
 
-
-"playlist_details_print(context::JSON3.Object) ---> nothing"
-function playlist_details_print(ioc, context::JSON3.Object)
-    if context.type !== "playlist"
-        if context.type == "collection"
-            print(ioc, "Library / liked songs.")
-        elseif context.type == "album"
-            print(ioc, " Context is album as shown in `")
-            printstyled(ioc, "track \\ album \\ artist", color = :green)
-            print(ioc, "`")
-        else
-            print(ioc, " Context is not Library, Playlist or Album. It is $(context.type)")
-        end
-        return
-    end
-    playlist_id = SpPlaylistId(context.uri)
-    playlist_details_print(ioc, playlist_id)
-    nothing
-end
-
 "delete_track_from_playlist_print(track_id, item::JSON3.Object) ---> Bool"
 function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON3.Object)
     if ! (is_track_in_local_data(track_id, playlist_id) || is_track_in_online_playlist(track_id, playlist_id))
@@ -211,7 +191,7 @@ function delete_track_from_playlist_print(ioc, track_id, playlist_id, item::JSON
         printstyled(ioc, "This deletion may take minutes to show everywhere. The playlist's snapshot ID against which you deleted the track:\n", color = :green)
         sleep(1)
         tracks_data_update(; forceupdate = true)
-        println(ioc,  "  ", res.snapshot_id)
+        println(ioc,  "  playlist snapshot id after deletion: ", res.snapshot_id)
         return true
     end
 end
@@ -289,6 +269,7 @@ wanted_feature_pair(p) = p[1] ∈ wanted_feature_keys()
 """
     playlist_details_print(playlist_id::SpPlaylistId)
     playlist_details_print(ioc, playlist_id::SpPlaylistId, tracks_data)
+    playlist_details_print(ioc, context::JSON3.Object)
 
 This is rather slow because 'details' include fetching the online only description.
 """
@@ -299,8 +280,9 @@ function playlist_details_print(ioc, playlist_id::SpPlaylistId, tracks_data)
     pld = Spotify.Playlists.playlist_get(playlist_id; market = "")[1]
     if isempty(pld)
         println(ioc, "Can't get playlist details.")
+        return
     end
-    print(ioc, pld.name)
+    playlist_no_details_print(ioc, playlist_id, pld.name)
     plo_id = pld.owner.id
     user_id = get_user_name()
     if plo_id !== String(user_id)
@@ -311,11 +293,6 @@ function playlist_details_print(ioc, playlist_id::SpPlaylistId, tracks_data)
     end
     if pld.public && plo_id == String(user_id)
         print(ioc, " (public, $(pld.total) followers)")
-    end
-    if get(ioc, :print_ids, false)
-        print(ioc, "  ")
-        show(ioc, MIME("text/plain"), playlist_id)
-        color_set(ioc)
     end
     # We don't trust the web service to make a reliable count of
     # large playlists we own.
@@ -329,13 +306,35 @@ function playlist_details_print(ioc, playlist_id::SpPlaylistId, tracks_data)
     end
     nothing
 end
+function playlist_details_print(ioc, context::JSON3.Object)
+    if context.type !== "playlist"
+        if context.type == "collection"
+            print(ioc, "Library / liked songs.")
+        elseif context.type == "album"
+            print(ioc, " Context is album as shown in `")
+            printstyled(ioc, "track \\ album \\ artist", color = :green)
+            print(ioc, "`")
+        else
+            print(ioc, " Context is not Library, Playlist or Album. It is $(context.type)")
+        end
+        return
+    end
+    playlist_id = SpPlaylistId(context.uri)
+    playlist_details_print(ioc, playlist_id)
+    nothing
+end
 
-"playlist_no_details_print(playlist_id::SpPlaylistId)"
-function playlist_no_details_print(ioc, playlist_ref::PlaylistRef)
-    print(ioc, playlist_ref.name)
+"""
+    playlist_no_details_print(ioc, playlist_ref::PlaylistRef)
+    playlist_no_details_print(ioc, playlist_id::SpPlaylistId, playlist_name)
+"""
+playlist_no_details_print(ioc, p::PlaylistRef) = playlist_no_details_print(ioc, p.id, p.name)
+function playlist_no_details_print(ioc, playlist_id::SpPlaylistId, playlist_name)
+    print(color_set(ioc, :203), playlist_name)
+    color_set(ioc)
     if get(ioc, :print_ids, false)
         print(ioc, "  ")
-        show(ioc, MIME("text/plain"), playlist_ref.id)
+        show(ioc, MIME("text/plain"), playlist_id)
         color_set(ioc)
     end
     nothing

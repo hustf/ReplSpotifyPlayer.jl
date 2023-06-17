@@ -75,8 +75,12 @@ function init()
     # This improves the default when using Windows Terminal.
     # When using VS code, no difference. But note, in VS Code,
     # the terminal may 'blink' when we're using control codes,
-    # like in 'print_and_delete'
-    UnicodePlots.truecolors!()
+    # like in 'print_and_delete'. Very infrequently, VS Code
+    # terminal gets messed up (blinking). In that case, restart
+    # the application.
+    if Sys.iswindows() || lowercase(get(ENV, "COLORTERM", "")) == "truecolor"
+        UnicodePlots.truecolors!()
+    end
     @info "Type `:` to enter mini player mode, `e` or `⌫ ` to exit."
     nothing
 end

@@ -61,11 +61,11 @@ function search_then_select_print(ioc, tracks_data)
     # Fetch query from user
     search_query_prompt_print(ioc)
     q = string(read_line_with_predefined_text_print(ioc, SEARCHString[]))
-    if q !== ""
+    if q !== "" && q !== "..."
         trackname_hits = filter(:trackname => s -> semantic_contains(s, q), df)
         albumname_hits = filter(:album_name => s -> semantic_contains(s, q), df)
         artist_hits = filter(:artist =>  s -> semantic_contains(s, q), df)
-        date_hits = filter(:release_date =>  s -> semantic_contains(s, q), df)
+        date_hits = filter(:release_date =>  s -> semantic_contains(string(s), q), df)
         playlist_hits_vector = unique(filter(:pl_ref =>  ref -> semantic_contains(ref.name, q), df)[!, :pl_ref])
         hits = DataFrame()
         append!(hits, trackname_hits)
@@ -92,6 +92,7 @@ function search_then_select_print(ioc, tracks_data)
                 # the playlist. We don't actually know the actual tracks sequence.
                 # Instead of making a web service call, we will simply
                 # jump to the first track.....
+                # On Apple, the default terminal may produce ugly plots, e.g. ITerm2 is better.
                 first_track_data = DataFrame()
                 for playlist_ref in playlist_hits_vector
                     rw = subset(search_data1, :pl_ref => ByRow(==(playlist_ref)))[1, :]
@@ -103,11 +104,11 @@ function search_then_select_print(ioc, tracks_data)
             end
         end
         println(ioc)
-        SEARCHString[] = q
     else
         println(ioc, "\nEmpty search string, exiting search.")
     end
     color_set(ioc)
+    return q
 end
 
 function search_query_prompt_print(ioc)

@@ -122,7 +122,7 @@ function act_on_keystroke(char)
         color_set(ioc)
     elseif c == 's'
         io = color_set(ioc, :light_green)
-        search_then_select_print(io)
+        SEARCHString[] = search_then_select_print(io)
         color_set(ioc)
     elseif c == ' '
         # Pressing space will do nothing special, but current playing will be updated.
