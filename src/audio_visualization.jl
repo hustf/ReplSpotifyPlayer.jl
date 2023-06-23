@@ -14,7 +14,13 @@ function plot_audio(ioc, track_id, json)
     plot_audio_segments(ioc, json.segments)
 end
 
+"""
+     plot_audio_beats_bars_and_tatums(ioc, beats, bars, tatums, segments)
 
+Arguments after ioc are of type
+
+JSON3.Array{JSON3.Object, Base.CodeUnits{UInt8, String}, SubArray{UInt64, 1, Vector{UInt64}, Tuple{UnitRange{Int64}}, true}}
+"""
 function plot_audio_beats_bars_and_tatums(ioc, beats, bars, tatums, segments)
     # Plot graphics width - margin, gutter, border etc.
     nx = displaysize(ioc)[2] - 9

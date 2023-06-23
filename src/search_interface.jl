@@ -26,7 +26,7 @@ end
 
 
 """
-    search_then_select_print(ioc, tracks_data)
+    search_then_select_print(ioc, tracks_data; mock_user_input = "")
 
 Prompts user for a search string and shows results at pressing enter.
 If relevant track results, print an enumerated list and offer selection, then exit to menu.
@@ -45,7 +45,7 @@ Search results internally are lines in a flattened data frame, like:
 
 Because the data frame is 'flattened' on arist, some results will be for the same track.
 """
-function search_then_select_print(ioc, tracks_data)
+function search_then_select_print(ioc, tracks_data; mock_user_input = "")
     global SEARCHString
     search_data = select(tracks_data, Cols(:trackname, :album_name, :artists, :release_date, :trackid, :album_id, :artist_ids, r"playlistref"))
     # Collect all playlistref columns to a joined one.
@@ -60,7 +60,11 @@ function search_then_select_print(ioc, tracks_data)
     rename!(df, :artists => :artist, :artist_ids => :artist_id)
     # Fetch query from user
     search_query_prompt_print(ioc)
-    q = string(read_line_with_predefined_text_print(ioc, SEARCHString[]))
+    if mock_user_input == ""
+        q = string(read_line_with_predefined_text_print(ioc, SEARCHString[]))
+    else
+        q = mock_user_input
+    end
     if q !== "" && q !== "..."
         trackname_hits = filter(:trackname => s -> semantic_contains(s, q), df)
         albumname_hits = filter(:album_name => s -> semantic_contains(s, q), df)
@@ -83,7 +87,9 @@ function search_then_select_print(ioc, tracks_data)
             println(ioc, "Listing hits:")
             rng = enumerated_track_album_artist_context_print(io, hits)
             println(ioc)
-            select_track_context_and_play_print(ioc, hits)
+            if mock_user_input == ""
+                select_track_context_and_play_print(ioc, hits)
+            end
         else
             if ! isempty(playlist_hits_vector)
                 rng = enumerated_playlist_print(ioc, playlist_hits_vector, tracks_data)
@@ -98,9 +104,11 @@ function search_then_select_print(ioc, tracks_data)
                     rw = subset(search_data1, :pl_ref => ByRow(==(playlist_ref)))[1, :]
                     push!(first_track_data, rw)
                 end
-                select_track_context_and_play_print(ioc, first_track_data)
+                if mock_user_input == ""
+                    select_track_context_and_play_print(ioc, first_track_data)
+                end
             else
-                println("Press s to search again.")
+                println(ioc, "Press s to search again.")
             end
         end
         println(ioc)

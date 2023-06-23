@@ -517,7 +517,7 @@ function track_abnormality_rank_in_list_print(ioc, rpd)
     print(io, " place of ")
     printstyled(io, length(abnormalities))
     color_set(io)
-    println(" ranked from most to least abnormal.")
+    println(io, " ranked from most to least abnormal.")
     color_set(ioc)
     ordinal
 end

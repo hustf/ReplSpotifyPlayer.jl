@@ -7,7 +7,8 @@ import ReplSpotifyPlayer: InlineStrings
 using ReplSpotifyPlayer: groupby, combine, transform, nrow, select!, Not
 using ReplSpotifyPlayer: flatten_horizontally_vector, names, unflatten_horizontally_vector
 using ReplSpotifyPlayer: tracks_namedtuple_from_playlist, tracks_data_append_namedtuple_from_playlist!
-using ReplSpotifyPlayer: delete_the_last_and_missing_playlistref_columns!, countmap
+using ReplSpotifyPlayer: delete_the_last_and_missing_playlistref_columns!, countmap, _loadtypes
+import CSV
 
 ##############################
 # tracks_data_append_playlist!
@@ -161,3 +162,14 @@ df = DataFrame(n = [10, 20, 30],
 @test ncol(df) == 4
 delete_the_last_and_missing_playlistref_columns!(df)
 @test ncol(df) == 3
+
+#################################
+# Prepare for precompile workload
+#################################
+
+savestring = "trackid,trackname,danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness,isrc,album_id,album_name,albumtype,release_date,available_markets,playlistref,playlistref_1,playlistref_2,playlistref_3,artists_1,artist_ids_1\n4WDFsTvNBbkiYc3eoGd0Xp,Aldhechen Manin,0.863,9,0.789,0.0538,234307,0.0437,0.103,0,0.828,4,0.377,75.017,-7.05,FR9W10300943,5FPDGVaIIfWVH79NJoslSe,Amassakoul,album,2004-10-12,,\"PlaylistRef(\"\"75-76spm\"\", \"\"MzIsN2U2MDY0OTY5OTUyMmI0ZjJlNjZkOTRiZTljMGNjOTAyYWY3ZDczMA==\"\", 4ud3ACGzjSHgfXjdX9YSd8)\",,,,Tinariwen,2sf2owtFSCvz2MLfxmNdkb\n3LklW07tvdx2AHsgfi1Mng,I Wish,0.669,7,0.572,0.147,249293,0.0,0.38,1,0.00137,4,0.809,97.885,-7.146,USVR10300417,34hLOvajp6WQOGlt6CNLSA,I Wish,album,1995-09-02,CA US,\"PlaylistRef(\"\"97-98spm\"\", \"\"NDEsNDBkN2JlOTNmOWRmODE5ZGI2MjMyZmYzZmJkOGY3ODA4YzViNWI0Mg==\"\", 1olNe2lIG7O3xYcp0txRom)\",\"PlaylistRef(\"\"-- Liked from Radio --\"\", \"\"OTE0LDI0NDNkYzJlOTAyZDE4ZmU2ZjU5YTc1ZTM4N2EzMmQ5MDlkM2QwYTU=\"\", 3FyJWXqFocKq2SYGjGoelU)\",,,Skee-Lo,55Pp4Ns5VfTSFsBraW7MQy\n"
+iob = IOBuffer(savestring)
+csv = CSV.File(iob; types = _loadtypes)
+df0 = DataFrame(csv)
+df1 = unflatten_horizontally_vector(df0, :artists)
+TDF[] = unflatten_horizontally_vector(df1, :artist_ids)

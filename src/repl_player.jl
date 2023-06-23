@@ -361,7 +361,7 @@ function sort_playlist_other_select_print(ioc; pre_selection = nothing)
         # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
         rng = 1:length(vs)
         for (i, s) in enumerate(vs)
-            println("  ", lpad(i, 3), "  ", s)
+            println(ioc, "  ", lpad(i, 3), "  ", s)
         end
         io = color_set(ioc, :176)
         print(io, "Type feature number ∈ ")
