@@ -108,11 +108,11 @@ end
 
 
 """
-    current_context_ranked_select_print(f, ioc)
+    current_context_ranked_select_print(f, ioc; func_name = "", alphabetically = false)
 
    `f` is a function that takes the argument context_tracks_data::DataFrame
-        and returns a vector of Float64. Example: `abnormality`.
-    `func_name` can be passed as a keyword argument. Use this for anonymous functions.
+        and returns a vector of Float64. Example: `abnormality`. 'deviation' is a special case and takes two.
+    `func_name` can be passed as a keyword argument. Use this when passing anonymous functions.
 """
 function current_context_ranked_select_print(f, ioc; func_name = "", alphabetically = false)
     st = get_player_state(ioc)
@@ -125,9 +125,9 @@ function current_context_ranked_select_print(f, ioc; func_name = "", alphabetica
         return false
     end
     track_id = SpTrackId(st.item.uri)
-    if isnothing(st.context) || st.context.type == "artist"
+    if isnothing(st.context)
         io = color_set(ioc, :red)
-        println(io, "Player context is not a playlist or album; cant find context track data.")
+        println(io, "Player context is not a playlist, album or artist; cant find context track data.")
         color_set(ioc)
         return false
     end
@@ -142,34 +142,183 @@ function current_context_ranked_select_print(f, ioc; func_name = "", alphabetica
             vpop = map(i -> i.popularity , o)
             context_tracks_data.popularity = vpop
         end
-    else
+    elseif st.context.type == "album"
         context_typed_ref, context_tracks_data = album_get_id_and_data(st.context)
+    elseif st.context.type == "artist"
+        context_typed_ref, context_tracks_data  = artist_get_id_and_top_data(st.context)
+    else
+        throw(st.context.type)
     end
-    track_data = subset(context_tracks_data, :trackid => ByRow(==(track_id)))
-    @assert ! isempty(track_data)
+    current_i = findfirst( ==(track_id), context_tracks_data.trackid)
+    if isnothing(current_i) 
+        println(color_set(ioc, :yellow), "The currently playing song is not part of the $(st.context.type ) context.")
+        println(color_set(ioc, :yellow), "We may have played past the end, or deleted the track from this playlist.")
+        println(color_set(ioc, :yellow), "Ranking current with context songs is not implemented.")
+        return false
+    else
+        context_ranked_select_print(f, ioc, context_typed_ref, context_tracks_data, context_tracks_data[current_i, :]; func_name, alphabetically)
+    end
+end
+
+"""
+    context_ranked_select_print(f, ioc, context_typed_ref, context_tracks_data::DataFrame, current_data_rw::DataFrameRow; func_name, alphabetically)
+
+Called from  current_context_ranked_select_print
+"""
+function context_ranked_select_print(f, ioc, context_typed_ref, context_tracks_data::DataFrame, current_data_row::DataFrameRow; func_name, alphabetically)
     if ! alphabetically
         if f == abnormality
-            rpd = build_histogram_data(track_data, context_typed_ref, context_tracks_data)
-            histograms_plot(ioc, rpd)
+            rpd = build_histogram_data(current_data_row, context_typed_ref, context_tracks_data)
+            if nrow(context_tracks_data) > 1
+                histograms_plot(ioc, rpd)
+            end
             track_abnormality_rank_in_list_print(ioc, rpd)
+        elseif f == deviation # This takes two arguments, as calculated values depends on the current track.
+            text = func_name == "" ? string(f) : func_name
+            fvalues = Number.(f(context_tracks_data, current_data_row))
+            height = 3
+            i = findfirst( ==(current_data_row.trackid), context_tracks_data.trackid)
+            track_value = fvalues[i]
+            plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
         else
             text = func_name == "" ? string(f) : func_name
             fvalues = Number.(f(context_tracks_data))
             height = 3
-            if track_data ∈ eachrow(context_tracks_data)
-                i = findfirst( ==(track_data.trackid), eachrow(context_tracks_data.trackid))
-                track_value = fvalues[i]
-            else
-                track_value = first(f(track_data))
+            i = findfirst( ==(current_data_row.trackid), context_tracks_data.trackid)
+            track_value = isnothing(i) ? throw("calculate this") : fvalues[i]
+            if length(fvalues) > 1
+                plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
             end
-            plot_single_histogram_with_highlight_sample(ioc, text, fvalues, track_value, height)
         end
     end
-    context_ranked_print_play(f, ioc, context_tracks_data, context_typed_ref, track_id; func_name, alphabetically)
+    context_ranked_print_play(f, ioc, context_tracks_data, context_typed_ref, current_data_row.trackid; func_name, alphabetically)
+end
+
+
+"""
+    context_ranked_print_play(f::Function, ioc, context_tracks_data, context_typed_ref,
+        current_track_id; func_name = "")\\
+    ---> true
+
+Calculate f(context_tracks_data) for all tracks in the playlist or album 'context_typed_ref'. Sort by 
+return values.
+
+Print the sorted list, emphasize track_id. For no emphasis, set track_id = nothing.
+
+Ask for input: a track number in the list of tracks to resume playing from. Context will not be changed.
+
+# Arguments
+
+`f` is a function that takes the argument context_tracks_data::DataFrame
+and returns a vector of Float64. Examples: `abnormality`, 'danceability', 
+'trackname' (if that still exists.)
+"""
+function context_ranked_print_play(f::Function, ioc, context_tracks_data, context_typed_ref,
+     current_track_id; func_name = "", alphabetically = false)
+    track_ids = context_tracks_data[!,:trackid]
+    track_names = context_tracks_data[!,:trackname]
+    if f == deviation
+        i = findfirst( ==(current_track_id), context_tracks_data.trackid)
+        current_data_row = context_tracks_data[i,:]
+        fvalues = Number.(f(context_tracks_data, current_data_row))
+    else
+        fvalues = f(context_tracks_data)
+    end
+    if context_typed_ref isa PlaylistRef
+        playlist_no_details_print(color_set(ioc, :blue), context_typed_ref)
+    elseif context_typed_ref isa SpAlbumId
+        album_details_print(ioc, context_typed_ref)
+    elseif context_typed_ref isa SpArtistId
+        artist_details_print(ioc, context_typed_ref)
+    else    
+        throw("not implemented")
+    end
+    if ! alphabetically
+        print(color_set(ioc, :light_black), " sorted decreasing by ")
+    else
+        print(color_set(ioc, :light_black), " sorted alphabetically by ")
+    end
+    color_set(ioc, :white)
+    if func_name == ""
+        print(ioc, f)
+    else
+        print(ioc, func_name)
+    end
+    color_set(ioc)
+    println(ioc, ":")
+    sorted_track_ids, sorted_names, sorted_values = sort_context_tracks_by_decreasing_values(track_ids, track_names, fvalues)
+    context_track_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id; alphabetically)
+    if context_typed_ref isa SpArtistId
+        select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_names; original_order = track_ids)
+    else
+         select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_names)
+    end
 end
 
 
 
+function deviation(context_tracks_data::DataFrame, reference_row)
+    tracks_af = select_cols_with_relevant_audio_features(context_tracks_data)
+    # Each track has several 'dimensions'. We are going to look at
+    # all the values in order to establish a comparable 'length' for 
+    # each of the dimensions.
+    #
+    # Rearrange from dataframe to nested vector. Top level is each audio feature type.
+    # The next level contains a value from each track in the set.
+    #
+    # The reference vector also contains a value per audio feature type.
+    # The reference is what we're comparing with. 
+    #
+    # The nine dimensions for each sample has different scales.
+    # So we transform the coordinates to a normalized space.
+    audio_values_nested = Vector{Vector{Float64}}()
+    audio_values_nested_normalized = Vector{Vector{Float64}}()
+    reference_values = Vector{Float64}()
+    reference_values_normalized = Vector{Float64}()
+    for symb in propertynames(tracks_af)
+        push!(audio_values_nested, Float64[])
+        push!(audio_values_nested_normalized, Float64[])
+        push!(reference_values, reference_row[symb])
+    end
+    for i in 1:nrow(tracks_af)
+        for (j, symb) in enumerate(propertynames(tracks_af))
+            push!(audio_values_nested[j], tracks_af[i, symb])
+        end
+    end
+    reference_values_normalized = normalized_sample_deviation(audio_values_nested, reference_values)
+    for i in 1:nrow(tracks_af)
+        track_values = Float64.(collect(tracks_af[i,:]))
+        audio_values_normalized = normalized_sample_deviation(audio_values_nested, track_values)
+        for (j, symb) in enumerate(propertynames(tracks_af))
+            push!(audio_values_nested_normalized[j], audio_values_normalized[j])
+        end
+    end
+    # This is now in normalized space: reference_values_normalized and audio_values_nested_normalized
+    # Let's find the nested distance vector. That is, the distance in each dimension for all tracks.
+    distance_values_nested_normalized  = Vector{Vector{Float64}}()
+    for (j, symb) in enumerate(propertynames(tracks_af))
+        vec = audio_values_nested_normalized[j]
+        distances = vec .- reference_values_normalized[j]
+        push!(distance_values_nested_normalized, distances)
+    end
+    # Nobody's interested in multidimensional distances. Let's reduce this to a single distance 
+    # for every track.
+    distance_values_normalized = Vector{Float64}()
+    for i in 1:nrow(tracks_af)
+        distance_coordinates = Vector{Float64}()
+        for (j, symb) in enumerate(propertynames(tracks_af))
+            push!(distance_coordinates, distance_values_nested_normalized[j][i])
+        end
+        euclid_dist = sqrt(sum(distance_coordinates.^2))
+        push!(distance_values_normalized, euclid_dist)
+    end
+    distance_values_normalized
+end
+
+"""
+Making a structure from ReplPlotData was not a good choice in retrospect. 
+We ought to have used dataframes consistently for style points.
+"""
 struct ReplPlotData
     playlist_name::String
     track_name::String
@@ -182,18 +331,20 @@ end
 ReplPlotData(;playlist_name = "", track_name = "", height = 3) = ReplPlotData(playlist_name, track_name, height, String[], Vector{Vector{Float64}}(), Float64[], String[])
 
 """
-   build_histogram_data(track_data, context_typed_ref, playlist_data) ---> ReplPlotData
+   build_histogram_data(track_data, context_typed_ref, context_data) ---> ReplPlotData
 
 Extract and assign the data to a plottable structure.
 """
-function build_histogram_data(track_data, context_typed_ref, playlist_data)
-    playlist_af = select_cols_with_relevant_audio_features(playlist_data)
-    track_af = select_cols_with_relevant_audio_features(track_data)
-    track_name = track_data[1, :trackname]
+function build_histogram_data(track_data_row, context_typed_ref, context_data)
+    playlist_af = select_cols_with_relevant_audio_features(context_data)
+    track_af = select_cols_with_relevant_audio_features(track_data_row)
+    track_name = track_data_row[:trackname]
     if context_typed_ref isa PlaylistRef
         context_name = context_typed_ref.name
     elseif context_typed_ref isa SpAlbumId
-        context_name = playlist_data[1, :album_name]
+        context_name = context_data[1, :album_name]
+    elseif context_typed_ref isa SpArtistId
+        context_name = context_data[1, :artists][1] * " top ten"
     end
     build_histogram_data(track_name, track_af, context_name, playlist_af)
 end
@@ -208,6 +359,9 @@ function select_cols_with_relevant_audio_features(df)
     bigset =  df[!, wanted_feature_keys()]
     exclude = [:duration_ms, :mode, :loudness, :key]
     select(bigset, Not(exclude))
+end
+function select_cols_with_relevant_audio_features(df_row::DataFrameRow)
+    select_cols_with_relevant_audio_features(DataFrame(df_row))
 end
 
 """
@@ -239,11 +393,12 @@ Plots several histograms with highlighted samplas and a common title
 function histograms_plot(ioc, rpd::ReplPlotData)
     # Print the title
     println(ioc)
-    printstyled(ioc, rpd.track_name, color = :green)
-    printstyled(ioc, "   <---->    ", color = :light_black)
-    printstyled(ioc, rpd.playlist_name, color = :blue)
-    printstyled(ioc, "   ", length(rpd.data_for_bins[1]), " tracks ", color = :light_black)
-    println(ioc)
+    print(color_set(ioc, 183), rpd.track_name)
+    color_set(ioc)
+    print(color_set(ioc, :light_black), "   <---->    ")
+    print(color_set(ioc, :203), rpd.playlist_name)
+    print(color_set(ioc, :light_black), "   ", length(rpd.data_for_bins[1]), " tracks ")
+    println(color_set(ioc))
     for (text, data_for_bins, track_value) in zip(rpd.text, rpd.data_for_bins, rpd.track_values)
         plot_single_histogram_with_highlight_sample(ioc, text, data_for_bins, track_value, rpd.height)
     end
@@ -329,17 +484,18 @@ how it ranks compared to the other tracks in the
 playlist.
 """
 function track_abnormality_rank_in_list_print(ioc, rpd)
+    # We might want to use dataframes, get rid of the stuct rpd, and reuse printing + menu functions.
     alldata = rpd.data_for_bins
     abnormality = euclidean_normalized_sample_deviation(alldata, rpd.track_values)
     io = color_set(ioc, :light_black)
     println(io)
-    printstyled(io, rpd.track_name, color = :green)
+    printstyled(io, rpd.track_name, color = :183)
     color_set(io)
     print(io, " has abnormality ")
     printstyled(io, round(abnormality, digits = 3), color=:white)
     color_set(io)
     print(io, " from mean of ")
-    printstyled(io, rpd.playlist_name, color = :light_blue)
+    printstyled(io, rpd.playlist_name, color = :203)
     color_set(io)
     println(io, ".")
     # Compare with the other tracks
@@ -350,6 +506,9 @@ function track_abnormality_rank_in_list_print(ioc, rpd)
     end
     sort!(abnormalities, rev = true)
     ordinal = findfirst(==(abnormality), abnormalities)
+    if isnothing(ordinal)
+        ordinal = 1
+    end
     @assert ! isnothing(ordinal)
     print(io, repeat(' ', length(rpd.track_name)))
     print(io, " takes the ")
@@ -395,56 +554,13 @@ function ordinal_string(ordinal, setsize)
     end
 end
 
-"""
-    context_ranked_print_play(f::Function, ioc, context_tracks_data, context_typed_ref,
-        current_track_id; func_name = "")\\
-    ---> true
-
-Calculate f(context_tracks_data) for all tracks in the playlist or album 'context_typed_ref'. Sort by 
-return values.
-
-Print the sorted list, emphasize track_id. For no emphasis, set track_id = nothing.
-
-Ask for input: a track number in the list of tracks to resume playing from. Context will not be changed.
-
-# Arguments
-
-`f` is a function that takes the argument context_tracks_data::DataFrame
-and returns a vector of Float64. Examples: `abnormality`, 'danceability', 
-'trackname' (if that still exists.)
-"""
-function context_ranked_print_play(f::Function, ioc, context_tracks_data, context_typed_ref,
-     current_track_id; func_name = "", alphabetically = false)
-    track_ids = context_tracks_data[!,:trackid]
-    track_names = context_tracks_data[!,:trackname]
-    fvalues = f(context_tracks_data)
-    if context_typed_ref isa PlaylistRef
-        playlist_no_details_print(color_set(ioc, :blue), context_typed_ref)
-        context_uri = context_typed_ref.id
-    elseif context_typed_ref isa SpAlbumId
-        album_details_print(ioc, context_typed_ref)
-        context_uri = context_typed_ref
-    end
-    if ! alphabetically
-        print(color_set(ioc, :light_black), " sorted decreasing by ")
-    else
-        print(color_set(ioc, :light_black), " sorted alphabetically by ")
-    end
-    color_set(ioc, :white)
-    if func_name == ""
-        print(ioc, f)
-    else
-        print(ioc, func_name)
-    end
-    color_set(ioc)
-    println(ioc, ":")
-    sorted_track_ids, sorted_names, sorted_values = sort_context_tracks_by_decreasing_values(track_ids, track_names, fvalues)
-    context_track_values_ordinal_print(ioc, sorted_track_ids, sorted_names, sorted_values, current_track_id; alphabetically)
-    select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_names)
-end
 
 function abnormality(context_tracks_data::DataFrame)
     tr_af = select_cols_with_relevant_audio_features(context_tracks_data)
+    # Each track has several 'dimensions'. We are going to look at
+    # all the values in order to establish a comparable 'length' for 
+    # each of the dimensions.
+    #
     # Rearrange from dataframe to nested vector - one vector
     # contains a feature per track.
     audiodata = Vector{Vector{Float64}}()
@@ -462,6 +578,7 @@ function abnormality(context_tracks_data::DataFrame)
     end
     abnormalities
 end
+
 function sort_context_tracks_by_decreasing_values(track_ids, track_names, values)
     @assert length(track_ids) == length(track_names) == length(values)
     perm = sortperm(values, rev = true)
@@ -495,7 +612,7 @@ function context_track_values_ordinal_print(ioc, sorted_track_ids, sorted_track_
 end
 
 
-function select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_track_names)
+function select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids, sorted_track_names; original_order = SpTrackId[])
     inpno = input_number_in_range_and_print(ioc, 1:length(sorted_track_ids))
     isnothing(inpno) && return nothing
     track_id = sorted_track_ids[inpno]
@@ -512,10 +629,28 @@ function select_trackno_and_play_print(ioc, context_typed_ref, sorted_track_ids,
     elseif context_typed_ref isa SpAlbumId
         album_details_print(ioc, context_typed_ref)
         context_uri = context_typed_ref
+    elseif context_typed_ref isa SpArtistId
+        artist_details_print(ioc, context_typed_ref)
+        context_uri = context_typed_ref
+    else
+        throw("not implemented")
     end
     println(io)
     offset = Dict("uri" => track_id)
-    player_resume_playback(;context_uri, offset)
+    if context_typed_ref isa SpArtistId
+        # (response message): Can't have offset for context type: ARTIST
+        # This will play the most popular track, the first one.
+        player_resume_playback(;context_uri)
+        # Let's skip forward until the right track.
+        println(ioc, "Skipping forward to artist context track no. ", original_index, ". Please wait.")
+        for i = 1:(original_index - 1)
+            player_skip_to_next()
+            sleep(0.2)
+        end
+
+    else
+        player_resume_playback(;context_uri, offset)
+    end
     # Avoid having the previous track shown in status line...
     sleep(1)
     true
@@ -594,10 +729,10 @@ can't use these shorthands.
 ```
 begin
 menu =  \"\"\"
-e : exit.     f(→) : forward.     b(←) : back.     p: pause, play.     0-9:  seek.
-del(fn + ⌫  ) : delete track from playlist. c : context. m : musician. g : genres.
-i : toggle ids.       a : audio features.       h : housekeeping.      ? : syntax.
-Sort then select  t : by typicality.  o : other features.  ↑ : previous selection.
+¨⌫  / e : exit.  ¨? : help.  ¨⏎ / space : refresh.   ¨f / → : forward.   ¨b / ← : back. 
+¨p : pause, play.   ¨0-9 : seek.  ¨c : context.  ¨m : musician.  ¨g : genres.  ¨i : ids. 
+¨a : audio display.  ¨s : search.   ¨h : housekeeping.   ¨del / fn + ¨⌫ : delete track. 
+~Sort then select § ¨t : by typicality.  ¨o : other features.  ¨↑ : previous selection.
         \"\"\"
     print(stdout, characters_to_ansi_escape_sequence(menu))
 end

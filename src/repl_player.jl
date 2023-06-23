@@ -352,13 +352,13 @@ end
 key: 'o' or 't'
 """
 function sort_playlist_other_select_print(ioc; pre_selection = nothing)
-    # Consider TODO: Add a variant of typicality: List by similarity to the current track.
+    vs = wanted_feature_keys()
+    push!(vs, :trackname)
+    push!(vs, :popularity)
+    push!(vs, :deviation)
     if isnothing(pre_selection)
         println(ioc, "\nTrack feature select")
         # danceability,key,valence,speechiness,duration_ms,instrumentalness,liveness,mode,acousticness,time_signature,energy,tempo,loudness
-        vs = wanted_feature_keys()
-        push!(vs, :trackname)
-        push!(vs, :popularity)
         rng = 1:length(vs)
         for (i, s) in enumerate(vs)
             println("  ", lpad(i, 3), "  ", s)
@@ -379,19 +379,23 @@ function sort_playlist_other_select_print(ioc; pre_selection = nothing)
     end
     if picked_key == :abnormality
         current_context_ranked_select_print(abnormality, ioc)
-    elseif picked_key ∈ wanted_feature_keys() || picked_key == :popularity
-        current_context_ranked_select_print(ioc; func_name = "$(picked_key)") do playlist_tracks_data
-            collect(playlist_tracks_data[!, picked_key])
-        end
-    else
-        current_context_ranked_select_print(ioc; func_name = "$(picked_key)", alphabetically = true) do playlist_tracks_data
+    elseif picked_key == :trackname
+        current_context_ranked_select_print(ioc; func_name = "$(picked_key)", alphabetically = true) do context_tracks_data
             # An unsorted vector
-            v = playlist_tracks_data[!, picked_key]
+            v = context_tracks_data[!, picked_key]
             # The sequence of indexes that would sort v
             p = sortperm(v; rev = true)
             # The sorted position for each element in v
             map( i-> findfirst(==(i), p), 1:length(v))
         end
+    elseif picked_key == :deviation
+        current_context_ranked_select_print(deviation, ioc)
+    elseif picked_key ∈ vs
+        current_context_ranked_select_print(ioc; func_name = "$(picked_key)") do context_tracks_data
+            collect(context_tracks_data[!, picked_key])
+        end
+    else
+        throw(ArgumentError("pre_selection = $pre_selection"))
     end
     picked_key
 end

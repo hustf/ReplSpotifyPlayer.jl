@@ -85,6 +85,17 @@ function init()
     nothing
 end
 
+
+# Prior to precompilation tools, after small change, v"1.9.0-beta4":
+# @time begin;push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer;end 
+# 63.696591 seconds
+# 34.435758 seconds (no changes)
+# Update to J 1.9.1, first time:
+# @time begin;push!(ENV, "SPOTIFY_NOINIT" => "true"); using ReplSpotifyPlayer;end 
+# 261.538231 second
+# Second and third run:
+# 29.850486 seconds
+
 function __init__()
     if lowercase(get(ENV, "SPOTIFY_NOINIT", "false")) !== "true"
         println("The environment variable SPOTIFY_NOINIT is not set to \"true\". More browser windows than necessary may pop up.")

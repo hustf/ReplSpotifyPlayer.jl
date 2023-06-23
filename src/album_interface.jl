@@ -13,15 +13,12 @@ function album_details_print(ioc, album_id::SpAlbumId)
     album_details_print(ioc, album_id, album)
 end
 function album_details_print(ioc, album_id, album::JSON3.Object)
-    print(ioc, album.name)
+    album_no_details_print(IOContext(ioc, :print_date => true), album.name, album.release_date, album_id)
     io = color_set(ioc, :normal)
-    print(io, "  release date: ", album.release_date)
-    print(io, "  label: ", album.label)
-    print(io, "  tracks: ", album.total_tracks)
-    if get(io, :print_ids, false)
-        print(io, "  ")
-        show(io, MIME("text/plain"), album_id)
-    end
+    print(color_set(io, :light_black), "  label: ")
+    print(color_set(io, :normal), album.label)
+    print(color_set(io, :light_black), "  tracks: ")
+    print(color_set(io, :normal), album.total_tracks)
     color_set(ioc)
     nothing
 end

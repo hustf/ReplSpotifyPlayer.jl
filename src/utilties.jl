@@ -15,33 +15,18 @@ function playtracks(v)
     println(length(v))
 end
 
-
 """
     euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
     ---> Float64
 
-This method shows how well a multi-dimensional sample would fit in 'sets'. If the sample is
-already part of the set, use the method below.
+This method shows how well a multi-dimensional sample would fit in 'sets'. 
 
 Note that actually adding the sample to the set would change the mean and deviation. This method can be
 used to determine which sets a sample would fit best to.
 """
 function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
-    @assert length(sets) == length(single_sample_values)
-    param_distances = Float64[]
-    for (vec, x) in zip(sets, single_sample_values)
-        μ = mean(vec)
-        σ = std(vec, corrected = true)
-        Δ = x - μ
-        if σ == 0
-            @assert Δ == 0
-            push!(param_distances, 0.0)
-        else
-            Δ_per_σ = Δ / σ
-            push!(param_distances, Δ_per_σ)
-        end
-    end
-    sqrt(sum(param_distances.^2))
+    param_deviation_norm = normalized_sample_deviation(sets, single_sample_values)
+    sqrt(sum(param_deviation_norm.^2))
 end
 
 """"
@@ -80,3 +65,31 @@ function euclidean_normalized_sample_deviation(sets::Vector{Vector{T}}, sample_n
     euclidean_normalized_sample_deviation(sets, single_sample_values)
 end
 
+"""
+    normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
+    --> Vector{Float64}
+
+Called from `euclidean_normalized_sample_deviation` and `deviation`
+"""
+function normalized_sample_deviation(sets::Vector{Vector{T}}, single_sample_values::Vector{T}) where T
+    @assert length(sets) == length(single_sample_values)
+    param_deviation_norm = Float64[]
+    for (vec, x) in zip(sets, single_sample_values)
+        Δ_per_σ = normalized_sample_deviation(vec, x)
+        push!(param_deviation_norm, Δ_per_σ)
+    end
+    param_deviation_norm
+end
+
+"called normalized_sample_deviation"
+function normalized_sample_deviation(vec, x)
+    μ = mean(vec)
+    σ = std(vec, corrected = true)
+    Δ = x - μ
+    if σ == 0
+        @assert Δ == 0
+        0.0
+    else
+        Δ / σ
+    end
+end

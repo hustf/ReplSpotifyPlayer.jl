@@ -62,7 +62,7 @@ function artist_tracks_in_playlists_print(ioc, uri::String)
     # Called from current_context_print if the context is an artist.
     artist_id = SpArtistId(uri)
     artist_tracks_in_playlists_print(ioc, artist_id)
-    nothing'm'
+    nothing
 end
 function artist_tracks_in_playlists_print(ioc, artist_id::SpArtistId; enumerator = 1)
     # Called from current_context_print -> artist_tracks_in_playlists_print if the context is an artist.
@@ -134,4 +134,85 @@ function artist_tracks_contexts_print(ioc, tracks_data, artist_id; enumerator = 
     df = artist_tracks_in_playlists_print(ioc, tracks_data, artist_id; enumerator)
     println(color_set(ioc))
     df
+end
+
+"""
+    artist_get_id_and_data(context::JSON3.Object)
+    ---> (::SpartistId, ::DataFrame)
+"""
+function artist_get_id_and_top_data(context::JSON3.Object)
+    artist_id = SpArtistId(context.uri)
+    artist_top_data =  top_tracks_data_from_artist(artist_id)
+    tracks_data_append_audio_features!(artist_top_data; silent = false)
+    artist_id, artist_top_data
+end
+
+
+
+"""
+    top_tracks_data_from_artist(arist_id::SpArtistId)
+
+# Arguments
+
+- artist_id       Artist id to add top-ten tracks from
+"""
+function top_tracks_data_from_artist(artist_id::SpArtistId)
+    nt = top_tracks_namedtuple_from_artist(artist_id)
+    DataFrame(nt)
+end
+
+"""
+    top_tracks_namedtuple_from_artist(artist_id::SpArtistId)
+    ---> NamedTuple{field_names}(field_values)
+"""
+function top_tracks_namedtuple_from_artist(artist_id::SpArtistId)
+    o, waitsec = artist_top_tracks(artist_id);
+    make_named_tuple_from_artist_top_object(o)
+end
+
+"""
+    function make_named_tuple_from_artist_top_object(o)
+        ---> NamedTuple{field_names}(field_values)
+
+o is the JSON object from artist_top_tracks
+"""
+function make_named_tuple_from_artist_top_object(o)
+    trackid =  map(i -> SpTrackId(i.id) , o.tracks)
+    trackname =  map(i -> string(i.name)  , o.tracks)
+    popularity =  map(i -> i.popularity  , o.tracks)
+    album_id = map(i -> SpAlbumId(i.album.id)  , o.tracks)
+    album_name = map(i -> string(i.album.name)  , o.tracks)
+    disc_number = map(i -> i.disc_number, o.tracks)
+    track_number = map(i -> i.track_number, o.tracks)
+    artists =  map(o.tracks) do i
+        map(i.artists) do a
+            string(a.name)
+        end
+    end
+    artist_ids =  map(o.tracks) do i
+        map(i.artists) do a
+            SpArtistId(a.id)
+        end
+    end
+    # Make output a NamedTuple...
+    field_names = (
+        :trackid,
+        :trackname,
+        :artists,
+        :artist_ids,
+        :popularity,
+        :album_id,
+        :album_name,
+        :disc_number,
+        :track_number)
+    field_values = [trackid,
+        trackname,
+        artists,
+        artist_ids,
+        popularity,
+        album_id,
+        album_name,
+        disc_number,
+        track_number]
+    NamedTuple{field_names}(field_values)
 end
