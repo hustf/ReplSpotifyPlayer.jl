@@ -5,6 +5,13 @@ This adds a 'Spotify-mode' to the Julia REPL. Use it in combination with Spotify
 You can do some new things from this mode. Jump back to the `julia>` prompt 
 to query and use the locally stored dataframe of tracks, audio features and playlist references.
 
+<img src="resources/Menu883.png" alt = "menuimg" style="display: inline-block; margin: 0 auto; max-width: 883px">
+
+
+--------------------
+
+
+
 ```
 julia> # Press ':'
 
@@ -16,8 +23,6 @@ Sort then select  t : by typicality.  o : other features.  ↑ : previous select
   Harry's Record Machine \ Scratch Marchin' \ Kormac
  ◍ >
 ```
-
-
 ## What more you can do with it
 
 Maybe you run Spotify on the phone and don't want to pick it up?  
